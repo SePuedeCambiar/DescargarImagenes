@@ -52,51 +52,14 @@ export default class WaifuGrabberEngine {
     constructor() {
         this.logManager = new LogManager(process.env.LOG_FILE || 'hashes_log.json');
         this.sources = {
-            rule34: { name: 'rule34', pidMult: 42 },
-            danbooru: { name: 'danbooru', pidMult: 20 },
-            gelbooru: { name: 'gelbooru', pidMult: 42 }
+            rule34: { name: 'rule34', pidMult: 42, domain: 'rule34.xxx' },
+            danbooru: { name: 'danbooru', pidMult: 20, domain: 'danbooru.donmai.us' },
+            gelbooru: { name: 'gelbooru', pidMult: 42, domain: 'gelbooru.com' }
         };
     }
 
-    // FUNCIÓN CRÍTICA: Extrae la URL real de la imagen desde la página del post
-    async extractRealImageUrl(post) {
-        if (post.url.includes('cdn.donmai.us') || post.url.includes('wimg.rule34') || post.url.includes('img.gelbooru')) {
-            return post.url;
-        }
-
-        const browser = await BrowserManager.getInstance();
-        const page = await browser.newPage();
-        try {
-            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-            await page.goto(post.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-            
-            return await page.evaluate((sourceName) => {
-                if (sourceName === 'rule34') {
-                    const v = document.querySelector('video source');
-                    if (v && v.src) return v.src;
-                    const i = document.querySelector('#image');
-                    return i ? i.src : null;
-                }
-                if (sourceName === 'danbooru') {
-                    const l = document.querySelector('#post-option-view-original a');
-                    return l ? l.href : null;
-                }
-                if (sourceName === 'gelbooru') {
-                    const i = document.querySelector('#image');
-                    return i ? i.src : null;
-                }
-                return null;
-            }, post.source);
-        } catch (e) {
-            console.error(`[Extract Error] ${e.message}`);
-            return null;
-        } finally {
-            await page.close();
-        }
-    }
-
     async fetchPosts(tagName, selectedSources, page) {
-        console.log(`[GRABBER] 🚀 Motor activado. Buscando: ${tagName} en ${selectedSources.join(', ')}`);
+        console.log(`\n--- [SISTEMA] Iniciando búsqueda: ${tagName} ---`);
         const browser = await BrowserManager.getInstance();
         let allPosts = [];
 
@@ -113,50 +76,61 @@ export default class WaifuGrabberEngine {
 
                 const webUrl = srcKey === 'danbooru'
                     ? `https://danbooru.donmai.us/posts?tags=${encodeURIComponent(tagName)}&page=${page}`
-                    : `https://${srcKey === 'rule34' ? 'rule34.xxx' : 'gelbooru.com'}/index.php?page=post&s=list&tags=${encodeURIComponent(tagName)}&pid=${(page-1)*src.pidMult}`;
+                    : `https://${src.domain}/index.php?page=post&s=list&tags=${encodeURIComponent(tagName)}&pid=${(page-1)*src.pidMult}`;
 
                 const apiUrl = srcKey === 'danbooru'
                     ? `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(tagName)}&page=${page}&limit=42`
-                    : `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(tagName)}&pid=${(page-1)*src.pidMult}&limit=42`;
+                    : `https://${src.domain}/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(tagName)}&pid=${(page-1)*src.pidMult}&limit=42`;
 
                 await pageObj.goto(webUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                await pageObj.waitForFunction(() => !document.body.innerText.includes('Just a moment'), { timeout: 15000 }).catch(() => {});
+                await pageObj.waitForFunction(() => !document.body.innerText.includes('Just a moment'), { timeout: 10000 }).catch(() => {});
 
-                const data = await pageObj.evaluate(async (url) => {
-                    try {
+                // INTENTO 1: API JSON
+                let posts = [];
+                try {
+                    const data = await pageObj.evaluate(async (url) => {
                         const res = await fetch(url);
                         return await res.json();
-                    } catch (e) { return null; }
-                }, apiUrl);
+                    }, apiUrl);
+                    if (data) posts = Array.isArray(data) ? data : (data.post || []);
+                } catch (e) { posts = []; }
 
-                let posts = [];
-                if (data) {
-                    posts = Array.isArray(data) ? data : (data.post || []);
-                } else {
+                // INTENTO 2: PLAN B - Scraping Agresivo de Miniaturas
+                if (posts.length === 0) {
                     posts = await pageObj.evaluate((sourceName) => {
-                        let selector = sourceName === 'gelbooru' ? 'article.thumbnail-preview a, .thumbnail-preview a' : (sourceName === 'rule34' ? '.thumb a, article a' : '.post-preview a');
-                        const links = Array.from(document.querySelectorAll(selector));
-                        return links.map(a => {
-                            const match = a.href.match(/\/posts\/(\d+)/) || a.href.match(/id=(\d+)/) || a.href.match(/&id=(\d+)/);
-                            return { url: a.href, id: match ? match[1] : null };
-                        }).filter(p => p.id !== null);
+                        let selector = sourceName === 'gelbooru' ? '.thumbnail-preview' : (sourceName === 'rule34' ? '.thumb' : '.post-preview');
+                        const elements = Array.from(document.querySelectorAll(selector));
+                        
+                        return elements.map(el => {
+                            const a = el.querySelector('a');
+                            const img = el.querySelector('img');
+                            if (!a) return null;
+
+                            const match = a.href.match(/id=(\d+)/) || a.href.match(/\/posts\/(\d+)/);
+                            return {
+                                id: match ? match[1] : null,
+                                url: a.href,
+                                thumb: img ? img.src : null
+                            };
+                        }).filter(p => p && p.id);
                     }, srcKey);
                 }
 
                 const formatted = posts.map(p => {
-                // Obtenemos la URL de la miniatura original
-                let previewUrl = p.preview_file_url || p.preview_url || p.sample_url || '';
-                if (previewUrl.startsWith('//')) previewUrl = `https:${previewUrl}`;
-    
-                // YA NO USAMOS WESERV. Enviamos la URL directa.
-                return {
-                    id: p.id,
-                    source: srcKey,
-                    url: p.file_url || p.large_file_url || p.preview_url || p.url,
-                    preview: previewUrl, // <--- URL DIRECTA
-                    isDirect: !!p.file_url
+                    // PRIORIDAD: thumbnail extraída -> preview_url -> sample_url -> vacío
+                    let previewUrl = p.thumb || p.preview_file_url || p.preview_url || p.sample_url || '';
+                    if (previewUrl.startsWith('//')) previewUrl = `https:${previewUrl}`;
+                    
+                    return {
+                        id: p.id,
+                        source: srcKey,
+                        url: p.file_url || p.large_file_url || p.url,
+                        preview: previewUrl,
+                        isDirect: !!p.file_url
                     };
-            });
+                });
+
+                console.log(`[${srcKey}] Encontrados ${formatted.length} posts.`);
                 allPosts = allPosts.concat(formatted);
             } catch (e) { console.error(`[${srcKey}] Error: ${e.message}`); }
             finally { await pageObj.close(); }
@@ -167,14 +141,24 @@ export default class WaifuGrabberEngine {
     async downloadImage(post, downloadDir) {
         if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true });
 
-        // PASO CRÍTICO: Si la URL es de una página, extraer la URL de la imagen real
         let finalUrl = post.url;
         if (!post.isDirect || finalUrl.includes('index.php?page=post')) {
-            console.log(`[DL] Extrayendo URL real de la página: ${finalUrl}`);
-            const realUrl = await this.extractRealImageUrl(post);
-            if (!realUrl) return { success: false, message: "No se encontró la imagen real en la página" };
-            finalUrl = realUrl;
+            const browser = await BrowserManager.getInstance();
+            const page = await browser.newPage();
+            try {
+                await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                await page.goto(post.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+                finalUrl = await page.evaluate((sourceName) => {
+                    const i = document.querySelector('#image');
+                    if (i && i.src) return i.src;
+                    const l = document.querySelector('a[href*="/images/"]');
+                    return l ? l.href : null;
+                }, post.source);
+            } catch (e) { console.error(`[DL Error] ${e.message}`); }
+            finally { await page.close(); }
         }
+
+        if (!finalUrl) return { success: false, message: "No real image found" };
 
         return new Promise((resolve) => {
             const referers = { rule34: 'https://rule34.xxx/', danbooru: 'https://danbooru.donmai.us/', gelbooru: 'https://gelbooru.com/' };
@@ -186,7 +170,6 @@ export default class WaifuGrabberEngine {
                 '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 '-H', `Referer: ${ref}`,
                 '-H', 'Accept: image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-                '-H', 'Accept-Language: en-US,en;q=0.9',
                 '-H', 'Sec-Fetch-Dest: image',
                 '-H', 'Sec-Fetch-Mode: no-cors',
                 '-H', 'Sec-Fetch-Site: cross-site',

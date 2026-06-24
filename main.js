@@ -13,21 +13,30 @@ const engine = new WaifuGrabberEngine();
 // 🛡️ INTERCEPTOR DE HEADERS (Sustituye la función que faltaba)
 // =============================================================================
 function setupHeaderInterceptor() {
-    console.log("[MAIN] Configurando interceptor de headers avanzado...");
+    console.log("[MAIN] 🛡️ Interceptor Activo. Monitoreando tráfico de imágenes...");
     
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         const url = details.url;
-        let referer = '';
+        
+        // Detectamos si la URL pertenece a alguna de nuestras fuentes
+        const isBooru = url.includes('donmai.us') || 
+                        url.includes('rule34') || 
+                        url.includes('gelbooru') || 
+                        url.includes('wimg');
 
-        if (url.includes('donmai.us')) referer = 'https://danbooru.donmai.us/';
-        else if (url.includes('rule34.xxx')) referer = 'https://rule34.xxx/';
-        else if (url.includes('gelbooru.com')) referer = 'https://gelbooru.com/';
-        else if (url.includes('wimg.rule34')) referer = 'https://rule34.xxx/';
-
-        if (referer) {
-            console.log(`[RED] 🛡️ Engañando a ${referer} para cargar imagen...`);
+        if (isBooru) {
+            console.log(`[RED-LOG] 📡 Interceptando: ${url}`);
+            
+            // Forzamos el Referer dinámico según el dominio
+            let referer = 'https://google.com/';
+            if (url.includes('donmai')) referer = 'https://danbooru.donmai.us/';
+            else if (url.includes('rule34')) referer = 'https://rule34.xxx/';
+            else if (url.includes('gelbooru')) referer = 'https://gelbooru.com/';
+            
             details.requestHeaders['Referer'] = referer;
             details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+            
+            console.log(`[RED-LOG] ✅ Headers aplicados. Referer: ${referer}`);
         }
         
         callback({ cancel: false, requestHeaders: details.requestHeaders });

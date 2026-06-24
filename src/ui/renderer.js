@@ -19,7 +19,7 @@ function logToTerminal(msg) {
 
 function renderGrid(posts) {
     logToTerminal(`Rendiendo grid con ${posts.length} imágenes...`);
-    resultsGrid.innerHTML = ''; 
+    resultsGrid.innerHTML = '';
     currentPosts = posts;
 
     if (posts.length === 0) {
@@ -33,21 +33,20 @@ function renderGrid(posts) {
         
         const img = document.createElement('img');
         
-        // TRUCO MAESTRO: Usamos la URL directa pero SIN referer
-        // Esto salta el bloqueo de la mayoría de las Boorus
+        // LOG DE AUDITORÍA: ¿Qué URL estamos intentando cargar?
+        logToTerminal(`[IMG-LOAD] Intentando cargar ${post.source} #${post.id} -> URL: ${post.preview}`);
+        
         img.src = post.preview; 
         img.loading = 'lazy';
-        img.referrerPolicy = 'no-referrer'; // <--- ESTO ES LO QUE SOLUCIONA EL BLOQUEO
         
         img.onload = () => {
-            // Imagen cargada con éxito
+            // logToTerminal(`[IMG-OK] Cargada: ${post.id}`);
         };
 
         img.onerror = () => {
-            // IMPORTANTE: Desactivamos el onerror para evitar el parpadeo/bucle infinito
             img.onerror = null; 
-            logToTerminal(`❌ Error final cargando imagen ${index}: ${post.preview}`);
-            img.src = 'https://via.placeholder.com/200x200?text=No+Preview';
+            logToTerminal(`[IMG-FAIL] ❌ Error crítico cargando ${post.source} #${post.id}. URL: ${post.preview}`);
+            img.src = 'https://via.placeholder.com/200x200?text=Error+403';
         };
 
         const info = document.createElement('div');
@@ -64,6 +63,7 @@ function renderGrid(posts) {
 
     globalControls.classList.remove('hidden');
 }
+
 
 
 async function downloadOne(post) {
