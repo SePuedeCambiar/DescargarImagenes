@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waifu Grabber Pro</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- HEADER: Búsqueda y Filtros -->
+        <header>
+            <h1>🌸 Waifu <span>Grabber</span></h1>
+            
+            <div class="search-section">
+                <div class="input-group">
+                    <input type="text" id="tagName" placeholder="Nombre del personaje / Tag...">
+                    <select id="mode">
+                        <option value="nsfw">🔥 NSFW</option>
+                        <option value="sfw">🌸 SFW</option>
+                    </select>
+                    <button id="btnSearch">Buscar</button>
+                </div>
+
+                <div class="filters">
+                    <label><input type="checkbox" class="source-check" value="rule34" checked> Rule34</label>
+                    <label><input type="checkbox" class="source-check" value="danbooru" checked> Danbooru</label>
+                    <label><input type="checkbox" class="source-check" value="gelbooru" checked> Gelbooru</label>
+                    
+                    <div class="page-control">
+                        <span>Página:</span>
+                        <input type="number" id="pageNumber" value="1" min="1">
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- CONTROLES GLOBALES: Solo aparecen al haber resultados -->
+        <div id="globalControls" class="global-controls hidden">
+            <div class="action-buttons">
+                <button id="btnDownloadPage" class="btn-secondary">📥 Descargar Página</button>
+                <div class="bulk-download">
+                    <span>Hasta pág:</span>
+                    <input type="number" id="untilPage" value="1" min="1">
+                    <button id="btnDownloadUntil" class="btn-secondary">🚀 Descarga Masiva</button>
+                </div>
+                <button id="btnClearLogs" class="btn-danger">🧹 Limpiar Hashes</button>
+            </div>
+            <div id="statusText" class="status-text">Listo para descargar</div>
+        </div>
+
+        <!-- GRID DE RESULTADOS -->
+        <div id="resultsGrid" class="results-grid">
+            <!-- Aquí se cargarán las imágenes dinámicamente -->
+            <div class="placeholder-text">Ingresa un nombre y presiona buscar...</div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

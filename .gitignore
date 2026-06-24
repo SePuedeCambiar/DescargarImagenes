@@ -1,0 +1,49 @@
+# --- Dependencias ---
+node_modules/
+jspm_packages/
+
+# --- Binarios de Puppeteer/Chromium ---
+# Puppeteer descarga el navegador en carpetas específicas. 
+# Dependiendo de la versión, puede estar en node_modules o en una carpeta de cache.
+.cache/puppeteer/
+
+# --- Sesiones y Datos de Usuario ---
+# Tu código usa 'session_boorus'. Esto contiene cookies y caches del navegador.
+# NUNCA subas esto, ya que contiene tus sesiones y es muy pesado.
+session_boorus/
+.session/
+
+# --- Archivos de Datos y Logs ---
+# Evita subir el historial de imágenes ya descargadas y archivos temporales.
+sent_images_log.json
+*.log
+temp/
+/app/temp/
+
+# --- Descargas ---
+# Aquí es donde se guardarán las imágenes/videos. 
+# Obviamente no quieres miles de imágenes en Git.
+downloads/
+output/
+*.jpg
+*.png
+*.gif
+*.webp
+*.mp4
+*.webm
+
+# --- Configuración Sensible ---
+# Para guardar API Keys o rutas locales sin que sean públicas.
+.env
+.env.local
+
+# --- OS / IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- Builds de Electron ---
+dist/
+out/
+build/
