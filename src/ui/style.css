@@ -165,15 +165,15 @@ button {
     font-style: italic;
 }
 
-.image-card {
-    background: var(--bg-panel);
-    border-radius: 8px;
-    overflow: hidden;
-    transition: 0.3s;
-    border: 1px solid #333;
-    display: flex;
-    flex-direction: column;
+.image-card img {
+    width: 100%;
+    height: 200px;
+    /* 'contain' hace que la imagen se vea completa sin estirarse */
+    object-fit: contain; 
+    background: #111; /* Fondo negro para los huecos que deje la imagen */
+    display: block;
 }
+
 
 .image-card:hover {
     transform: translateY(-5px);

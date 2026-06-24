@@ -3,38 +3,33 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import WaifuGrabberEngine from './src/engine/grabber.js';
 
+// CORRECCIÓN: Definición correcta de rutas para modo ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const engine = new WaifuGrabberEngine();
 
 // =============================================================================
-// 🛡️ CONFIGURACIÓN DEL INTERCEPTOR (Ahora en una función)
+// 🛡️ INTERCEPTOR DE HEADERS (Sustituye la función que faltaba)
 // =============================================================================
 function setupHeaderInterceptor() {
     console.log("[MAIN] Configurando interceptor de headers avanzado...");
     
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         const url = details.url;
-        let referer = null;
+        let referer = '';
 
-        // Determinamos el Referer correcto según el dominio de la imagen
-        if (url.includes('donmai.us')) {
-            referer = 'https://danbooru.donmai.us/';
-        } else if (url.includes('rule34.xxx') || url.includes('wimg.rule34')) {
-            referer = 'https://rule34.xxx/';
-        } else if (url.includes('gelbooru.com')) {
-            referer = 'https://gelbooru.com/';
-        }
+        if (url.includes('donmai.us')) referer = 'https://danbooru.donmai.us/';
+        else if (url.includes('rule34.xxx')) referer = 'https://rule34.xxx/';
+        else if (url.includes('gelbooru.com')) referer = 'https://gelbooru.com/';
+        else if (url.includes('wimg.rule34')) referer = 'https://rule34.xxx/';
 
         if (referer) {
-            // LOG para saber que estamos interceptando una imagen
-            console.log(`[INTERCEPTOR] Forzando Referer ${referer} para: ${url.substring(0, 60)}...`);
-            
+            console.log(`[RED] 🛡️ Engañando a ${referer} para cargar imagen...`);
             details.requestHeaders['Referer'] = referer;
             details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
         }
-
+        
         callback({ cancel: false, requestHeaders: details.requestHeaders });
     });
 }
@@ -47,17 +42,23 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
-            webSecurity: false // Importante para cargar imágenes externas
+            webSecurity: false // PERMITE cargar imágenes de dominios externos
         }
     });
+
+    // ABRE LA CONSOLA AUTOMÁTICAMENTE para que veas los errores de red
+    win.webContents.openDevTools(); 
 
     win.loadFile('src/ui/index.html');
 }
 
-// --- Manejadores de IPC ---
+// =============================================================================
+// 🔌 MANEJADORES DE COMUNICACIÓN (IPC)
+// =============================================================================
 
 ipcMain.handle('search-images', async (event, args) => {
     try {
+        console.log(`[MAIN] Buscando: ${args.tag}`);
         return await engine.fetchPosts(args.tag, args.sources, args.page);
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda:`, error);
@@ -108,12 +109,12 @@ ipcMain.handle('dialog:openDirectory', async () => {
 });
 
 // =============================================================================
-// 🚀 INICIO DE LA APLICACIÓN
+// 🚀 CICLO DE VIDA DE LA APP
 // =============================================================================
 app.whenReady().then(() => {
-    // 1. Primero configuramos la red (interceptor)
+    // PRIMERO: Configuramos el bypass de red
     setupHeaderInterceptor();
-    // 2. Luego creamos la ventana
+    // SEGUNDO: Creamos la interfaz
     createWindow();
 });
 
