@@ -56,7 +56,7 @@ function createWindow() {
     });
 
     // ABRE LA CONSOLA AUTOMÁTICAMENTE para que veas los errores de red
-    win.webContents.openDevTools(); 
+    //win.webContents.openDevTools(); 
 
     win.loadFile('src/ui/index.html');
 }
