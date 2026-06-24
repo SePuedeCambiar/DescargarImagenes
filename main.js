@@ -13,7 +13,7 @@ const engine = new WaifuGrabberEngine();
 // 🛡️ INTERCEPTOR DE HEADERS (Sustituye la función que faltaba)
 // =============================================================================
 function setupHeaderInterceptor() {
-    console.log("[MAIN] 🛡️ Interceptor Activo. Monitoreando tráfico de imágenes...");
+    //console.log("[MAIN] 🛡️ Interceptor Activo. Monitoreando tráfico de imágenes...");
     
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         const url = details.url;
@@ -25,7 +25,7 @@ function setupHeaderInterceptor() {
                         url.includes('wimg');
 
         if (isBooru) {
-            console.log(`[RED-LOG] 📡 Interceptando: ${url}`);
+            //console.log(`[RED-LOG] 📡 Interceptando: ${url}`);
             
             // Forzamos el Referer dinámico según el dominio
             let referer = 'https://google.com/';
@@ -67,7 +67,7 @@ function createWindow() {
 
 ipcMain.handle('search-images', async (event, args) => {
     try {
-        console.log(`[MAIN] Buscando: ${args.tag}`);
+        //console.log(`[MAIN] Buscando: ${args.tag}`);
         return await engine.fetchPosts(args.tag, args.sources, args.page);
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda:`, error);

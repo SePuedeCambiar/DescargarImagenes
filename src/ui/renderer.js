@@ -18,7 +18,7 @@ function logToTerminal(msg) {
 }
 
 function renderGrid(posts) {
-    logToTerminal(`Rendiendo grid con ${posts.length} imágenes...`);
+    //logToTerminal(`Rendiendo grid con ${posts.length} imágenes...`);
     resultsGrid.innerHTML = '';
     currentPosts = posts;
 
@@ -34,7 +34,7 @@ function renderGrid(posts) {
         const img = document.createElement('img');
         
         // LOG DE AUDITORÍA: ¿Qué URL estamos intentando cargar?
-        logToTerminal(`[IMG-LOAD] Intentando cargar ${post.source} #${post.id} -> URL: ${post.preview}`);
+        //logToTerminal(`[IMG-LOAD] Intentando cargar ${post.source} #${post.id} -> URL: ${post.preview}`);
         
         img.src = post.preview; 
         img.loading = 'lazy';
@@ -45,7 +45,7 @@ function renderGrid(posts) {
 
         img.onerror = () => {
             img.onerror = null; 
-            logToTerminal(`[IMG-FAIL] ❌ Error crítico cargando ${post.source} #${post.id}. URL: ${post.preview}`);
+            //logToTerminal(`[IMG-FAIL] ❌ Error crítico cargando ${post.source} #${post.id}. URL: ${post.preview}`);
             img.src = 'https://via.placeholder.com/200x200?text=Error+403';
         };
 
@@ -68,10 +68,10 @@ function renderGrid(posts) {
 
 async function downloadOne(post) {
     statusText.innerText = `📥 Descargando ${post.id}...`;
-    logToTerminal(`Iniciando descarga de ${post.id}...`);
+    //logToTerminal(`Iniciando descarga de ${post.id}...`);
     const res = await window.api.downloadSingle({ post, dir: './downloads' });
     statusText.innerText = res.success ? `✅ Guardado: ${post.id}` : `❌ ${res.message}`;
-    logToTerminal(`Resultado descarga ${post.id}: ${res.success ? 'Éxito' : 'Fallo - ' + res.message}`);
+    //logToTerminal(`Resultado descarga ${post.id}: ${res.success ? 'Éxito' : 'Fallo - ' + res.message}`);
 }
 
 btnSearch.addEventListener('click', async () => {
@@ -87,13 +87,13 @@ btnSearch.addEventListener('click', async () => {
 
     try {
         const posts = await window.api.searchImages({ tag, sources: selectedSources, page });
-        logToTerminal(`[UI] Respuesta recibida: ${posts?.length} posts.`);
+        //logToTerminal(`[UI] Respuesta recibida: ${posts?.length} posts.`);
         renderGrid(posts);
         statusText.innerText = posts && posts.length > 0 
             ? `✅ Se encontraron ${posts.length} imágenes.` 
             : "😢 No se encontraron imágenes.";
     } catch (e) {
-        logToTerminal(`[UI] Error crítico: ${e.message}`);
+        //logToTerminal(`[UI] Error crítico: ${e.message}`);
         statusText.innerText = "❌ Error en el sistema.";
     } finally {
         btnSearch.disabled = false;
