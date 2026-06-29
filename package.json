@@ -11,8 +11,11 @@
   "build": {
     "appId": "com.waifu.grabber",
     "productName": "WaifuGrabber",
+    "asar": true,
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Utility"
     },
     "directories": {
@@ -23,17 +26,28 @@
       "preload.js",
       "src/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".cache/puppeteer",
+        "to": "puppeteer-browser",
+        "filter": [
+          "**/*"
+        ]
+      }
     ]
   },
   "dependencies": {
     "axios": "^1.18.1",
     "dotenv": "^17.4.2",
+    "jimp": "^1.6.1",
+    "puppeteer": "^22.0.0",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "puppeteer": "^22.0.0"
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   },
   "devDependencies": {
-    "electron": "^42.5.0", 
+    "@electron/rebuild": "^4.0.6",
+    "electron": "^42.5.0",
     "electron-builder": "^24.13.3"
   }
 }

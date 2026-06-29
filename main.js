@@ -3,31 +3,21 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import WaifuGrabberEngine from './src/engine/grabber.js';
 
-// CORRECCIÓN: Definición correcta de rutas para modo ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const engine = new WaifuGrabberEngine();
+let mainWindow; // <--- Variable global para poder enviar mensajes al frontend
 
 // =============================================================================
-// 🛡️ INTERCEPTOR DE HEADERS (Sustituye la función que faltaba)
+// 🛡️ INTERCEPTOR DE HEADERS
 // =============================================================================
 function setupHeaderInterceptor() {
-    //console.log("[MAIN] 🛡️ Interceptor Activo. Monitoreando tráfico de imágenes...");
-    
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         const url = details.url;
-        
-        // Detectamos si la URL pertenece a alguna de nuestras fuentes
-        const isBooru = url.includes('donmai.us') || 
-                        url.includes('rule34') || 
-                        url.includes('gelbooru') || 
-                        url.includes('wimg');
+        const isBooru = url.includes('donmai.us') || url.includes('rule34') || url.includes('gelbooru') || url.includes('wimg');
 
         if (isBooru) {
-            //console.log(`[RED-LOG] 📡 Interceptando: ${url}`);
-            
-            // Forzamos el Referer dinámico según el dominio
             let referer = 'https://google.com/';
             if (url.includes('donmai')) referer = 'https://danbooru.donmai.us/';
             else if (url.includes('rule34')) referer = 'https://rule34.xxx/';
@@ -35,42 +25,52 @@ function setupHeaderInterceptor() {
             
             details.requestHeaders['Referer'] = referer;
             details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-            
-            console.log(`[RED-LOG] ✅ Headers aplicados. Referer: ${referer}`);
         }
-        
         callback({ cancel: false, requestHeaders: details.requestHeaders });
     });
 }
 
 function createWindow() {
-    const win = new BrowserWindow({
+    mainWindow = new BrowserWindow({ // <--- Asignamos a la variable global
         width: 1200,
         height: 800,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
-            webSecurity: false // PERMITE cargar imágenes de dominios externos
+            webSecurity: false 
         }
     });
 
-    // ABRE LA CONSOLA AUTOMÁTICAMENTE para que veas los errores de red
-    //win.webContents.openDevTools(); 
-
-    win.loadFile('src/ui/index.html');
+    mainWindow.loadFile('src/ui/index.html');
 }
 
 // =============================================================================
 // 🔌 MANEJADORES DE COMUNICACIÓN (IPC)
 // =============================================================================
 
+// Búsqueda simple (Para la galería/preview)
 ipcMain.handle('search-images', async (event, args) => {
     try {
-        //console.log(`[MAIN] Buscando: ${args.tag}`);
+        // Seguimos usando fetchPosts para que la galería no se sature con miles de imágenes
         return await engine.fetchPosts(args.tag, args.sources, args.page);
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda:`, error);
+        throw error;
+    }
+});
+
+// NUEVO: Búsqueda masiva (Para obtener TODO y enviarlo al frontend)
+ipcMain.handle('search-all-images', async (event, args) => {
+    try {
+        return await engine.fetchAllPages(args.tag, args.sources, (progress) => {
+            // Enviamos el progreso al frontend en tiempo real
+            if (mainWindow) {
+                mainWindow.webContents.send('search-progress', progress);
+            }
+        });
+    } catch (error) {
+        console.error(`[MAIN] Error en búsqueda masiva:`, error);
         throw error;
     }
 });
@@ -93,16 +93,33 @@ ipcMain.handle('download-page', async (event, { posts, dir }) => {
     return results;
 });
 
+// ACTUALIZADO: Descarga masiva con notificación de progreso
 ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, endPage, dir }) => {
-    let results = { downloaded: 0, skipped: 0 };
-    for (let p = startPage; p <= endPage; p++) {
-        const posts = await engine.fetchPosts(tag, sources, p);
-        for (const post of posts) {
-            const res = await engine.downloadImage(post, dir);
-            res.success ? results.downloaded++ : results.skipped++;
+    let results = { downloaded: 0, skipped: 0, currentPage: 0 };
+    
+    try {
+        for (let p = startPage; p <= endPage; p++) {
+            results.currentPage = p;
+            
+            // Notificamos al frontend que estamos procesando esta página
+            if (mainWindow) {
+                mainWindow.webContents.send('download-progress', { 
+                    currentPage: p, 
+                    endPage: endPage 
+                });
+            }
+
+            const posts = await engine.fetchPosts(tag, sources, p);
+            for (const post of posts) {
+                const res = await engine.downloadImage(post, dir);
+                res.success ? results.downloaded++ : results.skipped++;
+            }
         }
+        return results;
+    } catch (error) {
+        console.error(`[MAIN] Error en descarga masiva:`, error);
+        return { success: false, message: error.message };
     }
-    return results;
 });
 
 ipcMain.handle('clear-logs', async () => {
@@ -121,9 +138,7 @@ ipcMain.handle('dialog:openDirectory', async () => {
 // 🚀 CICLO DE VIDA DE LA APP
 // =============================================================================
 app.whenReady().then(() => {
-    // PRIMERO: Configuramos el bypass de red
     setupHeaderInterceptor();
-    // SEGUNDO: Creamos la interfaz
     createWindow();
 });
 
