@@ -10,10 +10,7 @@ import { createRequire } from 'module';
 
 // Configuramos Jimp usando createRequire para evitar errores de exportación en ESM
 const require = createRequire(import.meta.url);
-const jimpModule = require('jimp');
-
-const Jimp = jimpModule.Jimp || jimpModule.default || jimpModule;
-
+const { Jimp } = require('jimp');
 
 puppeteer.use(StealthPlugin());
 
@@ -40,24 +37,42 @@ async function generateVisualHash(buffer) {
     try {
         const image = await Jimp.read(buffer);
         
-        // Redimensionar a 9x8 y convertir a escala de grises para normalizar
-        image.resize(9, 8).grayscale();
+        // 1. Redimensionar (Sintaxis v1: objeto {w, h})
+        // No encadenamos, lo hacemos en una línea separada
+        image.resize({ w: 9, h: 8 });
 
+        // 2. Accedemos directamente al buffer de píxeles (RGBA)
+        // image.bitmap.data es un Uint8Array: [R, G, B, A, R, G, B, A, ...]
+        const pixels = image.bitmap.data;
         let hash = "";
+
         for (let y = 0; y < 8; y++) {
             for (let x = 0; x < 8; x++) {
-                const left = image.getPixelColor(x, y);
-                const right = image.getPixelColor(x + 1, y);
-                // Comparación de brillo entre píxeles adyacentes
-                hash += left < right ? "1" : "0";
+                // Calculamos la posición del píxel actual y el siguiente (a la derecha)
+                // Cada píxel ocupa 4 bytes (R, G, B, A)
+                const currentIdx = (y * 9 + x) * 4;
+                const rightIdx = (y * 9 + (x + 1)) * 4;
+
+                // Calculamos el brillo manual (Promedio de R, G, B) para el píxel izquierdo
+                const leftBrightness = (pixels[currentIdx] + pixels[currentIdx + 1] + pixels[currentIdx + 2]) / 3;
+                
+                // Calculamos el brillo para el píxel derecho
+                const rightBrightness = (pixels[rightIdx] + pixels[rightIdx + 1] + pixels[rightIdx + 2]) / 3;
+
+                // Comparación binaria
+                hash += leftBrightness < rightBrightness ? "1" : "0";
             }
         }
         return hash;
     } catch (e) {
-        console.error("[VisualHash] Error procesando imagen:", e.message);
+        console.error("[VisualHash] Error crítico procesando imagen:", e);
         return null;
     }
 }
+
+
+
+
 
 // ==========================================
 // 📊 GESTOR DE CONTEOS (Soporte Danbooru 42+)
