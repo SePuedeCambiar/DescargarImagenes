@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-
+import { spawn } from 'child_process'; // <--- 🚨 AÑADE ESTA LÍNEA
 import BrowserManager from './core/BrowserManager.js';
 import LogManager from './core/LogManager.js';
 import HashService from './services/HashService.js';
@@ -8,6 +8,7 @@ import DownloadService from './services/DownloadService.js';
 import Rule34Source from './sources/Rule34Source.js';
 import DanbooruSource from './sources/DanbooruSource.js';
 import GelbooruSource from './sources/GelbooruSource.js';
+
 
 export default class WaifuGrabberEngine {
     constructor() {
@@ -35,29 +36,72 @@ export default class WaifuGrabberEngine {
     }
 
     async downloadImage(post, downloadDir) {
-        const source = this.sources[post.source];
-        const browser = await BrowserManager.getInstance();
-        
-        // 1. Resolver URL real
-        const finalUrl = await source.resolveImageUrl(post.url, browser);
-        
-        // 2. Descarga temporal
-        const tempPath = path.join(downloadDir, `temp_${Date.now()}.tmp`);
-        await DownloadService.download(finalUrl, source.domain, tempPath);
-        
-        // 3. Verificación de duplicados
-        const buffer = fs.readFileSync(tempPath);
-        const eHash = await HashService.calculateExactHash(buffer);
-        const vHash = await HashService.calculateVisualHash(buffer);
-
-        if (this.logManager.isDuplicate(eHash, vHash)) {
-            fs.unlinkSync(tempPath);
-            return { success: false, message: "Duplicate" };
-        }
-
-        // 4. Guardado final
-        // ... lógica de renombrado ...
-        this.logManager.save(eHash, vHash);
-        return { success: true };
+    // 1. CONVERTIMOS la ruta a ABSOLUTA para que curl no se pierda
+    const absoluteDir = path.resolve(downloadDir);
+    
+    if (!fs.existsSync(absoluteDir)) {
+        fs.mkdirSync(absoluteDir, { recursive: true });
     }
+
+    const source = this.sources[post.source];
+    const browser = await BrowserManager.getInstance();
+    
+    // 2. Resolver URL real
+    const finalUrl = await source.resolveImageUrl(post.url, browser);
+    if (!finalUrl) return { success: false, message: "No real image found" };
+
+    // 3. Crear ruta temporal ABSOLUTA
+    const tempPath = path.join(absoluteDir, `temp_${Date.now()}.tmp`);
+
+    return new Promise((resolve) => {
+        const referers = { 
+            rule34: 'https://rule34.xxx/', 
+            danbooru: 'https://danbooru.donmai.us/', 
+            gelbooru: 'https://gelbooru.com/' 
+        };
+        const ref = referers[post.source] || 'https://google.com';
+        
+        // Argumentos EXACTOS del método original
+        const args = ['-s', '-L', '-o', tempPath, '-H', `Referer: ${ref}`, finalUrl];
+        
+        const proc = spawn('curl', args);
+
+        proc.on('close', async (code) => {
+            if (code !== 0 || !fs.existsSync(tempPath)) {
+                console.error(`[SISTEMA] Curl falló con código ${code} en ruta ${tempPath}`);
+                resolve({ success: false, message: `Curl error ${code}` });
+                return;
+            }
+
+            try {
+                // Lógica de hashes (usando tus servicios)
+                const buffer = fs.readFileSync(tempPath);
+                const exactHash = await HashService.calculateExactHash(buffer);
+                const visualHash = await HashService.calculateVisualHash(buffer);
+
+                if (this.logManager.isDuplicate(exactHash, visualHash)) {
+                    fs.unlinkSync(tempPath);
+                    resolve({ success: false, message: "Duplicate" });
+                    return;
+                }
+
+                // Renombrado final
+                const cleanUrl = finalUrl.split('?')[0];
+                const ext = path.extname(cleanUrl) || '.jpg';
+                const fileName = `${post.source}_${post.id}${ext}`;
+                const fullPath = path.join(absoluteDir, fileName);
+                
+                fs.renameSync(tempPath, fullPath);
+                this.logManager.save(exactHash, visualHash);
+                
+                resolve({ success: true, filePath: fullPath });
+            } catch (e) {
+                console.error(`[SISTEMA] Error procesando archivo: ${e.message}`);
+                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+                resolve({ success: false, message: e.message });
+            }
+        });
+    });
+}
+
 }

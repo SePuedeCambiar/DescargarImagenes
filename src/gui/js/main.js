@@ -84,21 +84,19 @@ dom.btnSelectFolder.addEventListener('click', async () => {
 
 // 3. Acción: Descargar Página Actual
 dom.btnDownloadPage.addEventListener('click', async () => {
-    if (state.posts.length === 0) return alert("No hay imágenes para descargar");
+    if (state.posts.length === 0) return alert("No hay imágenes");
 
     updateStatus("📦 Descargando página completa...");
     
-    try {
-        // PASAMOS LA RUTA DESDE EL STATE
-        const res = await ApiService.downloadPage({ 
-            posts: state.posts, 
-            dir: state.downloadPath 
-        });
-        updateStatus(`✅ Completado: ${res.downloaded} bajadas, ${res.skipped} repetidas.`);
-    } catch (e) {
-        updateStatus("❌ Error en la descarga masiva", 'error');
-    }
+    // ✅ CORRECTO: Pasamos un objeto con posts y dir
+    const res = await ApiService.downloadPage({ 
+        posts: state.posts, 
+        dir: state.downloadPath 
+    });
+    
+    updateStatus(`✅ Completado: ${res.downloaded} bajadas.`);
 });
+
 
 // 4. Acción: Descarga Masiva hasta Página X
 dom.btnDownloadUntil.addEventListener('click', async () => {

@@ -40,12 +40,21 @@ export const GridUI = {
         return card;
     },
 
-    async handleDownload(post) {
-        // Aquí llamamos a un sistema de notificaciones externo
+        async handleDownload(post) {
         const status = document.getElementById('statusText');
         status.innerText = `📥 Descargando ${post.id}...`;
         
-        const res = await ApiService.downloadSingle(post);
-        status.innerText = res.success ? `✅ Guardado: ${post.id}` : `❌ ${res.message}`;
+        try {
+            // 🚀 CORRECCIÓN: Enviamos un OBJETO que contiene el post y la ruta del estado
+            const res = await ApiService.downloadSingle({ 
+                post: post, 
+                dir: state.downloadPath 
+            });
+            
+            status.innerText = res.success ? `✅ Guardado: ${post.id}` : `❌ ${res.message}`;
+        } catch (e) {
+            console.error(e);
+            status.innerText = `❌ Error crítico en descarga`;
+        }
     }
 };
