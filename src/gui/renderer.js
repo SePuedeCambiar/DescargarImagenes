@@ -65,13 +65,12 @@ function renderGrid(posts) {
 }
 
 
-
-async function downloadOne(post) {
-    statusText.innerText = `📥 Descargando ${post.id}...`;
-    //logToTerminal(`Iniciando descarga de ${post.id}...`);
+async function downloadOne(id, source, url) {
+    const post = { id, source, url }; // Creamos el objeto que el engine espera
+    statusText.innerText = `📥 Descargando ${id}...`;
+    
     const res = await window.api.downloadSingle({ post, dir: './downloads' });
-    statusText.innerText = res.success ? `✅ Guardado: ${post.id}` : `❌ ${res.message}`;
-    //logToTerminal(`Resultado descarga ${post.id}: ${res.success ? 'Éxito' : 'Fallo - ' + res.message}`);
+    statusText.innerText = res.success ? `✅ Guardado: ${id}` : `❌ ${res.message}`;
 }
 
 btnSearch.addEventListener('click', async () => {

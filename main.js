@@ -1,17 +1,21 @@
 import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
+
 import path from 'path';
 import { fileURLToPath } from 'url';
-import WaifuGrabberEngine from './src/engine/grabber.js';
+// ❗ IMPORTANTE: Ruta actualizada al nuevo nombre del archivo
+import WaifuGrabberEngine from './src/engine/GrabberEngine.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const engine = new WaifuGrabberEngine();
-let mainWindow; // <--- Variable global para poder enviar mensajes al frontend
+let mainWindow;
 
 // =============================================================================
 // 🛡️ INTERCEPTOR DE HEADERS
 // =============================================================================
+// Esto evita que las Boorus bloqueen las imágenes por falta de Referer
 function setupHeaderInterceptor() {
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         const url = details.url;
@@ -31,28 +35,28 @@ function setupHeaderInterceptor() {
 }
 
 function createWindow() {
-    mainWindow = new BrowserWindow({ // <--- Asignamos a la variable global
+    mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
-            webSecurity: false 
+            webSecurity: false // Necesario para cargar imágenes de dominios externos
         }
     });
 
-    mainWindow.loadFile('src/ui/index.html');
+    // Cargamos el HTML
+    mainWindow.loadFile('src/gui/index.html');
 }
 
 // =============================================================================
 // 🔌 MANEJADORES DE COMUNICACIÓN (IPC)
 // =============================================================================
 
-// Búsqueda simple (Para la galería/preview)
+// Búsqueda simple (Galería)
 ipcMain.handle('search-images', async (event, args) => {
     try {
-        // Seguimos usando fetchPosts para que la galería no se sature con miles de imágenes
         return await engine.fetchPosts(args.tag, args.sources, args.page);
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda:`, error);
@@ -60,11 +64,10 @@ ipcMain.handle('search-images', async (event, args) => {
     }
 });
 
-// NUEVO: Búsqueda masiva (Para obtener TODO y enviarlo al frontend)
+// Búsqueda masiva
 ipcMain.handle('search-all-images', async (event, args) => {
     try {
         return await engine.fetchAllPages(args.tag, args.sources, (progress) => {
-            // Enviamos el progreso al frontend en tiempo real
             if (mainWindow) {
                 mainWindow.webContents.send('search-progress', progress);
             }
@@ -75,6 +78,7 @@ ipcMain.handle('search-all-images', async (event, args) => {
     }
 });
 
+// Descarga de una sola imagen
 ipcMain.handle('download-single', async (event, { post, dir }) => {
     try {
         return await engine.downloadImage(post, dir);
@@ -84,6 +88,7 @@ ipcMain.handle('download-single', async (event, { post, dir }) => {
     }
 });
 
+// Descarga de la página actual
 ipcMain.handle('download-page', async (event, { posts, dir }) => {
     let results = { downloaded: 0, skipped: 0 };
     for (const post of posts) {
@@ -93,15 +98,13 @@ ipcMain.handle('download-page', async (event, { posts, dir }) => {
     return results;
 });
 
-// ACTUALIZADO: Descarga masiva con notificación de progreso
+// Descarga masiva hasta página X
 ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, endPage, dir }) => {
     let results = { downloaded: 0, skipped: 0, currentPage: 0 };
     
     try {
         for (let p = startPage; p <= endPage; p++) {
             results.currentPage = p;
-            
-            // Notificamos al frontend que estamos procesando esta página
             if (mainWindow) {
                 mainWindow.webContents.send('download-progress', { 
                     currentPage: p, 
@@ -122,10 +125,12 @@ ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, e
     }
 });
 
+// Limpiar historial de hashes
 ipcMain.handle('clear-logs', async () => {
     return engine.clearLogs();
 });
 
+// Diálogo para elegir carpeta
 ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
         properties: ['openDirectory']
@@ -145,3 +150,8 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
+
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+

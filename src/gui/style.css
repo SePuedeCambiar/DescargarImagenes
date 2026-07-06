@@ -211,3 +211,24 @@ button {
     padding: 5px;
     text-align: center;
 }
+
+.folder-selection {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    background: #252525;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid #333;
+}
+
+.path-text {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
