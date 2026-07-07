@@ -26,11 +26,9 @@
                     <button id="btnSearch">Buscar</button>
                 </div>
 
+                <!-- 🚨 AQUÍ ESTÁ EL CAMBIO: Ya no hay labels manuales. 
+                     El JS llenará este div dinámicamente basándose en el backend. -->
                 <div class="filters">
-                    <label><input type="checkbox" class="source-check" value="rule34" checked> Rule34</label>
-                    <label><input type="checkbox" class="source-check" value="danbooru" checked> Danbooru</label>
-                    <label><input type="checkbox" class="source-check" value="gelbooru" checked> Gelbooru</label>
-                    
                     <div class="page-control">
                         <span>Página:</span>
                         <input type="number" id="pageNumber" value="1" min="1">
@@ -42,7 +40,7 @@
         <!-- CONTROLES GLOBALES: Solo aparecen al haber resultados -->
         <div id="globalControls" class="global-controls hidden">
             
-            <!-- Nueva fila para la selección de carpeta -->
+            <!-- Fila para la selección de carpeta -->
             <div class="folder-selection">
                 <button id="btnSelectFolder" class="btn-secondary">📁 Seleccionar Carpeta</button>
                 <span id="currentPathText" class="path-text">./downloads</span>
@@ -68,7 +66,7 @@
         </div>
     </div>
 
-    <!-- CAMBIO CRÍTICO: Ahora usamos type="module" y apuntamos al nuevo main.js -->
+    <!-- Cargamos el orquestador del frontend como módulo -->
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -18,5 +18,7 @@ contextBridge.exposeInMainWorld('api', {
     selectFolder: () => ipcRenderer.invoke('dialog:openDirectory'),
 
     // 🛠️ DIAGNÓSTICO
-    sendLog: (msg) => ipcRenderer.send('ui-log', msg)
+    sendLog: (msg) => ipcRenderer.send('ui-log', msg),
+    
+    getSources: () => ipcRenderer.invoke('get-sources'),
 });

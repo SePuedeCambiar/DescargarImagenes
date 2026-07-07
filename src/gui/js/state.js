@@ -6,6 +6,7 @@ export const state = {
     tagName: '',
     currentPage: 1,
     selectedSources: [],
+    availableSources: [], // <--- NUEVO: Aquí guardamos la lista de fuentes que vienen del backend
     downloadPath: './downloads',
     isDownloading: false,
 
@@ -25,5 +26,11 @@ export const state = {
     setDownloadPath(newPath) {
         console.log(`[State] Nueva ruta de descarga: ${newPath}`);
         this.downloadPath = newPath;
+    },
+
+    // NUEVO: Método para guardar las fuentes disponibles detectadas por el Engine
+    setAvailableSources(sources) {
+        console.log(`[State] Cargando ${sources.length} fuentes disponibles.`);
+        this.availableSources = sources;
     }
 };

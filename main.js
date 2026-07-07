@@ -1,10 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
-
 import path from 'path';
 import { fileURLToPath } from 'url';
 // ❗ IMPORTANTE: Ruta actualizada al nuevo nombre del archivo
 import WaifuGrabberEngine from './src/engine/GrabberEngine.js';
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +51,16 @@ function createWindow() {
 // =============================================================================
 // 🔌 MANEJADORES DE COMUNICACIÓN (IPC)
 // =============================================================================
+
+// NUEVO: Obtener la lista de fuentes disponibles dinámicamente
+ipcMain.handle('get-sources', async () => {
+    try {
+        return engine.getAvailableSources();
+    } catch (error) {
+        console.error(`[MAIN] Error obteniendo fuentes:`, error);
+        return [];
+    }
+});
 
 // Búsqueda simple (Galería)
 ipcMain.handle('search-images', async (event, args) => {
@@ -154,4 +162,3 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
-

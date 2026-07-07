@@ -10,13 +10,13 @@ const dom = {
     btnDownloadPage: document.getElementById('btnDownloadPage'),
     btnDownloadUntil: document.getElementById('btnDownloadUntil'),
     btnClearLogs: document.getElementById('btnClearLogs'),
-    btnSelectFolder: document.getElementById('btnSelectFolder'), // Nuevo
-    currentPathText: document.getElementById('currentPathText'), // Nuevo
+    btnSelectFolder: document.getElementById('btnSelectFolder'),
+    currentPathText: document.getElementById('currentPathText'),
     statusText: document.getElementById('statusText'),
     inputTag: document.getElementById('tagName'),
     inputPage: document.getElementById('pageNumber'),
     inputUntilPage: document.getElementById('untilPage'),
-    sourceChecks: document.querySelectorAll('.source-check'),
+    filtersContainer: document.querySelector('.filters'), // Contenedor para checkboxes dinámicos
 };
 
 // ==========================================
@@ -27,10 +27,36 @@ function updateStatus(msg, type = 'info') {
     dom.statusText.style.color = type === 'error' ? 'var(--danger)' : 'var(--success)';
 }
 
+// Buscamos los checks en el momento exacto del click, ya que son dinámicos
 function getSelectedSources() {
-    return Array.from(dom.sourceChecks)
+    const checks = document.querySelectorAll('.source-check');
+    return Array.from(checks)
         .filter(cb => cb.checked)
         .map(cb => cb.value);
+}
+
+// 🎨 Dibuja los checkboxes basándose en las fuentes disponibles en el backend
+function renderSourceFilters() {
+    // Guardamos la referencia al control de página para no borrarlo
+    const pageControl = dom.filtersContainer.querySelector('.page-control');
+    
+    // Limpiamos el contenedor de filtros
+    dom.filtersContainer.innerHTML = '';
+
+    // Creamos un checkbox por cada fuente disponible en el estado
+    state.availableSources.forEach(source => {
+        const label = document.createElement('label');
+        label.innerHTML = `
+            <input type="checkbox" class="source-check" value="${source.id}" checked> 
+            ${source.name}
+        `;
+        dom.filtersContainer.appendChild(label);
+    });
+
+    // Volvemos a añadir el control de página al final
+    if (pageControl) {
+        dom.filtersContainer.appendChild(pageControl);
+    }
 }
 
 // ==========================================
@@ -88,7 +114,6 @@ dom.btnDownloadPage.addEventListener('click', async () => {
 
     updateStatus("📦 Descargando página completa...");
     
-    // ✅ CORRECTO: Pasamos un objeto con posts y dir
     const res = await ApiService.downloadPage({ 
         posts: state.posts, 
         dir: state.downloadPath 
@@ -96,7 +121,6 @@ dom.btnDownloadPage.addEventListener('click', async () => {
     
     updateStatus(`✅ Completado: ${res.downloaded} bajadas.`);
 });
-
 
 // 4. Acción: Descarga Masiva hasta Página X
 dom.btnDownloadUntil.addEventListener('click', async () => {
@@ -111,7 +135,6 @@ dom.btnDownloadUntil.addEventListener('click', async () => {
     updateStatus(`🚀 Iniciando descarga masiva hasta la pág ${endPage}...`);
     
     try {
-        // PASAMOS LA RUTA DESDE EL STATE
         const res = await ApiService.downloadUntil({ 
             tag, 
             sources, 
@@ -140,15 +163,25 @@ dom.btnClearLogs.addEventListener('click', async () => {
 // ==========================================
 // 🏁 INICIALIZACIÓN
 // ==========================================
-function init() {
-    console.log("🌸 Waifu Grabber UI Initialized");
+async function init() {
+    console.log("🌸 Waifu Grabber UI Initializing...");
     
-    // Seteamos la ruta inicial en el texto de la UI
-    if (dom.currentPathText) {
-        dom.currentPathText.innerText = state.downloadPath;
+    try {
+        // 1. Carga dinámica de fuentes desde el Backend
+        const sources = await ApiService.getSources();
+        state.setAvailableSources(sources);
+        renderSourceFilters();
+        
+        // 2. Configuración de ruta inicial
+        if (dom.currentPathText) {
+            dom.currentPathText.innerText = state.downloadPath;
+        }
+        
+        updateStatus("Listo para buscar");
+    } catch (e) {
+        console.error("Error en init:", e);
+        updateStatus("❌ Error al iniciar la aplicación", 'error');
     }
-    
-    updateStatus("Listo para buscar");
 }
 
 init();

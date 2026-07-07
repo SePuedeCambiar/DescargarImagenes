@@ -17,4 +17,7 @@ export const ApiService = {
     async selectFolder() {
         return await window.api.selectFolder();
     },
+    async getSources() {
+        return await window.api.getSources();
+    },
 };
