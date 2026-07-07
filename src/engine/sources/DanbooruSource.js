@@ -1,17 +1,56 @@
 import BaseSource from './BaseSource.js';
+import fs from 'fs';
+import path from 'path';
 
 export default class DanbooruSource extends BaseSource {
-    // 🚨 AÑADE ESTO: La fuente ahora se describe a sí misma para el cargador automático
+    // 🚨 CONFIGURACIÓN AUTOMÁTICA
     static config = { 
         name: 'danbooru', 
         domain: 'danbooru.donmai.us', 
         pidMult: 42 
     };
 
+    static COMMON_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+    };
+
+    // 🔍 AUTOCOMPLETADO: Implementación corregida y blindada
+    async getSuggestedTags(prefix, browser) {
+        const page = await browser.newPage();
+        try {
+            // Usamos 'name_start' para que el datalist de HTML muestre las sugerencias
+            const url = `https://danbooru.donmai.us/tags.json?search[name_start]=${encodeURIComponent(prefix)}`;
+            
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
+            
+            const content = await page.evaluate(() => document.body.innerText);
+            
+            try {
+                const data = JSON.parse(content);
+                if (Array.isArray(data)) {
+                    return data.slice(0, 10).map(tag => tag.name);
+                }
+            } catch (e) {
+                console.error(`[Autocomplete] Error parseando JSON: ${e.message}`);
+            }
+            return [];
+        } catch (e) {
+            console.error(`[Autocomplete] Error de red en Danbooru: ${e.message}`);
+            return [];
+        } finally {
+            await page.close();
+        }
+    }
+
+    // 📊 CONTEO DE POSTS: Corregido la URL y el parámetro
     async getPostCounts(tagName) {
         try {
+            // URL CORRECTA para conteo, usando tagName
             const url = `https://danbooru.donmai.us/counts/posts.json?tags=${encodeURIComponent(tagName)}`;
-            const res = await fetch(url);
+            
+            const res = await fetch(url, { headers: DanbooruSource.COMMON_HEADERS });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            
             const data = await res.json();
             const total = data.counts?.posts || 0;
             return { total, maxPage: Math.ceil(total / 42) };

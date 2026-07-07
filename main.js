@@ -49,7 +49,7 @@ function createWindow() {
 // 🔌 MANEJADORES DE COMUNICACIÓN (IPC)
 // =============================================================================
 
-// Obtener la lista de fuentes disponibles dinámicamente
+// 1. Gestión de Fuentes y Tags
 ipcMain.handle('get-sources', async () => {
     try {
         return engine.getAvailableSources();
@@ -59,45 +59,44 @@ ipcMain.handle('get-sources', async () => {
     }
 });
 
-// Búsqueda simple (Galería)
+ipcMain.handle('get-tag-suggestions', async (event, params) => {
+    try {
+        return await engine.suggestTags(params);
+    } catch (error) {
+        console.error(`[MAIN] Error en sugerencias:`, error);
+        return [];
+    }
+});
+
+
+// 2. Búsqueda
 ipcMain.handle('search-images', async (event, args) => {
     try {
-        // 🚀 NUEVO: Ahora pasamos categorías y denylist al motor
-        return await engine.fetchPosts(
-            args.tag, 
-            args.sources, 
-            args.page, 
-            args.categories || [], 
-            args.denylist || ''
-        );
+        // 🚀 Pasamos el objeto args completo. 
+        // GrabberEngine.fetchPosts(params) ahora lo recibirá correctamente.
+        return await engine.fetchPosts(args); 
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda:`, error);
         throw error;
     }
 });
 
-// Búsqueda masiva
+
 ipcMain.handle('search-all-images', async (event, args) => {
     try {
-        // 🚀 NUEVO: También pasamos los filtros en la búsqueda masiva
-        return await engine.fetchAllPages(
-            args.tag, 
-            args.sources, 
-            (progress) => {
-                if (mainWindow) {
-                    mainWindow.webContents.send('search-progress', progress);
-                }
-            },
-            args.categories || [], 
-            args.denylist || ''
-        );
+        // Adaptamos la llamada a fetchAllPages para que use el objeto de parámetros
+        return await engine.fetchAllPages(args, (progress) => {
+            if (mainWindow) {
+                mainWindow.webContents.send('search-progress', progress);
+            }
+        });
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda masiva:`, error);
         throw error;
     }
 });
 
-// Descarga de una sola imagen
+// 3. Descargas
 ipcMain.handle('download-single', async (event, { post, dir }) => {
     try {
         return await engine.downloadImage(post, dir);
@@ -107,7 +106,6 @@ ipcMain.handle('download-single', async (event, { post, dir }) => {
     }
 });
 
-// Descarga de la página actual
 ipcMain.handle('download-page', async (event, { posts, dir }) => {
     let results = { downloaded: 0, skipped: 0 };
     for (const post of posts) {
@@ -117,8 +115,8 @@ ipcMain.handle('download-page', async (event, { posts, dir }) => {
     return results;
 });
 
-// Descarga masiva hasta página X
-ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, endPage, dir, categories, denylist }) => {
+ipcMain.handle('download-until-page', async (event, args) => {
+    const { tag, sources, startPage, endPage, dir, categories, denylist } = args;
     let results = { downloaded: 0, skipped: 0, currentPage: 0 };
     
     try {
@@ -131,14 +129,14 @@ ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, e
                 });
             }
 
-            // 🚀 NUEVO: Pasamos los filtros al motor en cada página de la descarga masiva
-            const posts = await engine.fetchPosts(
+            // 🚀 CORRECCIÓN: Llamamos a fetchPosts pasando un OBJETO
+            const posts = await engine.fetchPosts({
                 tag, 
                 sources, 
-                p, 
-                categories || [], 
-                denylist || ''
-            );
+                page: p, 
+                categories: categories || [], 
+                denylist: denylist || ''
+            });
             
             for (const post of posts) {
                 const res = await engine.downloadImage(post, dir);
@@ -152,12 +150,11 @@ ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, e
     }
 });
 
-// Limpiar historial de hashes
+// 4. Utilidades
 ipcMain.handle('clear-logs', async () => {
     return engine.clearLogs();
 });
 
-// Diálogo para elegir carpeta
 ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
         properties: ['openDirectory']
@@ -172,8 +169,10 @@ ipcMain.handle('dialog:openDirectory', async () => {
 
 app.whenReady().then(async () => {
     try {
+        // Inicialización asíncrona del motor (Carga dinámica de plugins/sources)
         await engine.initialize(); 
-        console.log("✅ Motor inicializado y fuentes cargadas.");
+        console.log("✅ Motor inicializado y fuentes cargadas dinámicamente.");
+        
         setupHeaderInterceptor();
         createWindow();
     } catch (error) {

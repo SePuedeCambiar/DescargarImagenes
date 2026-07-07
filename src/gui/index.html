@@ -17,7 +17,8 @@
             
             <div class="search-section">
                 <div class="input-group">
-                    <input type="text" id="tagName" placeholder="Nombre del personaje / Tag...">
+                    <!-- El atributo list conecta este input con el datalist de abajo -->
+                    <input type="text" id="tagName" placeholder="Nombre del personaje / Tag..." list="tagSuggestions">
                     <select id="mode">
                         <option value="nsfw">🔥 NSFW</option>
                         <option value="sfw">🌸 SFW</option>
@@ -26,7 +27,7 @@
                 </div>
 
                 <div class="filters">
-                    <!-- Los checkboxes de fuentes se generan dinámicamente aquí -->
+                    <!-- Los checkboxes de fuentes se generan dinámicamente aquí desde main.js -->
                     <div class="page-control">
                         <span>Página:</span>
                         <input type="number" id="pageNumber" value="1" min="1">
@@ -34,13 +35,21 @@
                 </div>
             </div>
 
-            <!-- 🚀 NUEVO: SECCIÓN DE FILTROS AVANZADOS (Módulo B) -->
+            <!-- 🚀 SECCIÓN DE FILTROS AVANZADOS (Módulo B) -->
             <div class="advanced-filters">
+                <!-- FILA 1: Denylist -->
                 <div class="filter-group">
                     <label for="denylistInput">🚫 Denylist (Tags a excluir, separados por coma):</label>
                     <input type="text" id="denylistInput" placeholder="blur, lowres, watermark, text...">
                 </div>
+
+                <!-- FILA 2: Configuración de API (Para Autocompletado rápido) -->
+                <div class="filter-group">
+                    <label for="apiKey">🔑 Danbooru API Key (Opcional para autocompletado):</label>
+                    <input type="password" id="apiKey" placeholder="Introduce tu API Key aquí...">
+                </div>
                 
+                <!-- FILA 3: Categorías -->
                 <div class="filter-group">
                     <label>✨ Categorías rápidas (Añadir a la búsqueda):</label>
                     <div id="categoryToggles" class="category-chips">
@@ -78,6 +87,10 @@
             <div class="placeholder-text">Ingresa un nombre y presiona buscar...</div>
         </div>
     </div>
+
+    <!-- 🚀 ELEMENTO CRÍTICO PARA EL AUTOCOMPLETADO -->
+    <!-- Este elemento es invisible, pero es donde JS inserta las opciones de tags -->
+    <datalist id="tagSuggestions"></datalist>
 
     <!-- Cargamos el orquestador del frontend como módulo -->
     <script type="module" src="js/main.js"></script>

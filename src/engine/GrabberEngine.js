@@ -9,7 +9,9 @@ import DownloadService from './services/DownloadService.js';
 
 export default class WaifuGrabberEngine {
     constructor() {
-        this.logManager = new LogManager();
+        // Usamos una ruta estándar para los logs en el HOME del usuario para evitar problemas de permisos
+        const logPath = process.env.LOG_FILE || path.join(process.env.HOME || process.env.USERPROFILE, '.waifugrabber', 'hashes_log.json');
+        this.logManager = new LogManager(logPath);
         this.sources = {}; 
     }
 
@@ -89,29 +91,129 @@ export default class WaifuGrabberEngine {
     }
 
     // ==========================================
-    // 🚀 LÓGICA DE BÚSQUEDA (ACTUALIZADA PARA MÓDULO B)
+    // 🚀 LÓGICA DE BÚSQUEDA
     // ==========================================
-    async fetchPosts(tagName, selectedSources, page, categories = [], denylist = '') {
-        const browser = await BrowserManager.getInstance();
-        let allPosts = [];
+    // 🚨 CORRECCIÓN: Ahora recibe un objeto 'params' para coincidir con el Frontend y Main.js
+    // SUSTITUYE COMPLETAMENTE tu función fetchPosts por esta:
+async fetchPosts(params) {
+    // 1. Extraemos los datos del objeto params
+    const { tag, sources: selectedSources, page, categories = [], denylist = '' } = params;
+    
+    const browser = await BrowserManager.getInstance();
+    let allPosts = [];
 
-        // Construimos la consulta final una sola vez para todas las fuentes
-        const finalQuery = this.buildFinalQuery(tagName, categories, denylist);
-        console.log(`[Engine] Ejecutando búsqueda con query: ${finalQuery}`);
+    // 2. Construimos la query final
+    const finalQuery = this.buildFinalQuery(tag, categories, denylist);
+    console.log(`[Engine] Ejecutando búsqueda con query: ${finalQuery}`);
 
-        for (const key of selectedSources) {
-            const source = this.sources[key];
-            if (source) {
-                // Ahora pasamos finalQuery en lugar de tagName
-                const posts = await source.fetchPosts(page, finalQuery, browser);
-                allPosts.push(...posts);
+    // 3. Verificación de seguridad para evitar el error de "not iterable"
+    if (!selectedSources || !Array.isArray(selectedSources)) {
+        console.error("[Engine] Error: selectedSources no es un array válido. Recibido:", selectedSources);
+        return [];
+    }
+
+    for (const key of selectedSources) {
+        const source = this.sources[key];
+        if (!source) continue;
+
+        const pageObj = await browser.newPage();
+        try {
+            await pageObj.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+            await pageObj.setRequestInterception(true);
+            pageObj.on('request', (req) => {
+                if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) req.abort();
+                else req.continue();
+            });
+
+            if (key === 'danbooru') {
+                const apiUrl = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(finalQuery)}&page=${page}&limit=42`;
+                const apiData = await pageObj.evaluate(async (url) => {
+                    try {
+                        const res = await fetch(url);
+                        return await res.json();
+                    } catch (e) { return null; }
+                }, apiUrl);
+
+                if (apiData && Array.isArray(apiData)) {
+                    const formatted = apiData.map(p => ({
+                        id: p.id,
+                        source: 'danbooru',
+                        url: p.file_url || p.large_file_url || p.url,
+                        preview: p.preview_file_url || p.preview_url,
+                        isDirect: !!p.file_url
+                    }));
+                    allPosts = allPosts.concat(formatted);
+                }
+            } else {
+                const webUrl = `https://${source.domain}/index.php?page=post&s=list&tags=${encodeURIComponent(finalQuery)}&pid=${(page-1)*source.pidMult}`;
+                await pageObj.goto(webUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                const posts = await this.scrapeHTML(pageObj, key);
+                allPosts = allPosts.concat(posts);
+            }
+        } catch (e) { 
+            console.error(`[${key}] Error: ${e.message}`); 
+        } finally { 
+            await pageObj.close(); 
+        }
+    }
+    return allPosts;
+}
+        // ==========================================
+    // 🛠️ AUXILIAR DE SCRAPING (Soporte HTML)
+    // ==========================================
+    async scrapeHTML(pageObj, srcKey) {
+    return await pageObj.evaluate((sourceName) => {
+        // Intentamos varios selectores comunes en Boorus
+        const selectors = [
+            '.thumbnail-preview', // Gelbooru/Safebooru
+            '.thumb',             // Rule34
+            '.post-preview',      // Danbooru HTML
+            '.image-card',        // Genéricos
+            'div[class*="thumb"]' // Cualquier div que contenga la palabra thumb
+        ];
+
+        let elements = [];
+        for (const selector of selectors) {
+            const found = Array.from(document.querySelectorAll(selector));
+            if (found.length > 0) {
+                elements = found;
+                break; 
             }
         }
-        return allPosts;
+
+        return elements.map(el => {
+            const a = el.querySelector('a');
+            const img = el.querySelector('img');
+            if (!a) return null;
+
+            const match = a.href.match(/id=(\d+)/) || a.href.match(/\/posts\/(\d+)/);
+            return { 
+                id: match ? match[1] : null, 
+                source: sourceName, 
+                url: a.href, 
+                preview: img ? img.src : null, 
+                isDirect: false 
+            };
+        }).filter(p => p && p.id);
+    }, srcKey);
+}
+
+
+
+
+    // ==========================================
+    // 🔍 AUTOCOMPLETADO
+    // ==========================================
+    async suggestTags(prefix) {
+        const source = this.sources['danbooru'];
+        if (!source) return [];
+        
+        const browser = await BrowserManager.getInstance(); 
+        return await source.getSuggestedTags(prefix, browser);
     }
 
     // ==========================================
-    // 📥 LÓGICA de DESCARGA (Sigue igual)
+    // 📥 LÓGICA DE DESCARGA
     // ==========================================
     async downloadImage(post, downloadDir) {
         const absoluteDir = path.resolve(downloadDir);

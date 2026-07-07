@@ -3,8 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Exponemos la API segura al frontend
 contextBridge.exposeInMainWorld('api', {
     
-    // 🔍 BÚSQUEDA
+    // 🔍 BÚSQUEDA Y SUGERENCIAS
     searchImages: (data) => ipcRenderer.invoke('search-images', data),
+    getSuggestions: (params) => ipcRenderer.invoke('get-tag-suggestions', params),
+    getSources: () => ipcRenderer.invoke('get-sources'),
 
     // 📥 DESCARGAS
     downloadSingle: (data) => ipcRenderer.invoke('download-single', data),
@@ -19,6 +21,4 @@ contextBridge.exposeInMainWorld('api', {
 
     // 🛠️ DIAGNÓSTICO
     sendLog: (msg) => ipcRenderer.send('ui-log', msg),
-    
-    getSources: () => ipcRenderer.invoke('get-sources'),
 });

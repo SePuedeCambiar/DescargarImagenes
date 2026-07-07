@@ -18,9 +18,13 @@ const dom = {
     inputUntilPage: document.getElementById('untilPage'),
     filtersContainer: document.querySelector('.filters'),
     
-    // 🚀 NUEVO: Referencias a los filtros avanzados
+    // Referencias a los filtros avanzados
     denylistInput: document.getElementById('denylistInput'),
     categoryToggles: document.getElementById('categoryToggles'),
+    
+    // 🚀 Referencias para Autocompletado y API
+    tagSuggestions: document.getElementById('tagSuggestions'),
+    apiKey: document.getElementById('apiKey'), // <--- AÑADIDO: Input de la API Key
 };
 
 // ==========================================
@@ -49,7 +53,6 @@ function renderSourceFilters() {
     if (pageControl) dom.filtersContainer.appendChild(pageControl);
 }
 
-// 🚀 NUEVO: Lógica de Categorías Rápidas
 const SUGGESTED_CATEGORIES = ['highres', 'absurdres', 'official_art', 'cinematic', 'wallpaper'];
 
 function renderCategories() {
@@ -58,13 +61,12 @@ function renderCategories() {
 
     SUGGESTED_CATEGORIES.forEach(cat => {
         const chip = document.createElement('div');
-        // Si la categoría está en el state, le ponemos la clase 'active' (color morado)
         chip.className = `chip ${state.categories.includes(cat) ? 'active' : ''}`;
         chip.innerText = cat;
         
         chip.onclick = () => {
-            state.toggleCategory(cat); // Activa/Desactiva en el estado
-            renderCategories();        // Redibuja para cambiar el color
+            state.toggleCategory(cat);
+            renderCategories();
         };
         dom.categoryToggles.appendChild(chip);
     });
@@ -74,6 +76,44 @@ function renderCategories() {
 // 🚀 MANEJADORES DE EVENTOS (ORQUESTACIÓN)
 // ==========================================
 
+// --- 💡 Lógica de Autocompletado (Debounce) ---
+let debounceTimer; 
+
+dom.inputTag.addEventListener('input', async () => {
+    const prefix = dom.inputTag.value.trim();
+    
+    clearTimeout(debounceTimer);
+    
+    if (prefix.length < 3) {
+        dom.tagSuggestions.innerHTML = '';
+        return;
+    }
+
+    debounceTimer = setTimeout(async () => {
+        try {
+            // 🚀 CORRECCIÓN: Enviamos un objeto con el prefijo y la API Key
+            const suggestions = await ApiService.getSuggestions({ 
+                prefix: prefix,
+                apiKey: dom.apiKey ? dom.apiKey.value : '' 
+            });
+            
+            console.log("🚀 Sugerencias recibidas en la UI:", suggestions);
+            
+            dom.tagSuggestions.innerHTML = '';
+            if (suggestions && suggestions.length > 0) {
+                suggestions.forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag;
+                    dom.tagSuggestions.appendChild(option);
+                });
+            }
+        } catch (e) {
+            console.error("Error en autocompletado:", e);
+        }
+    }, 300);
+});
+
+// --- Búsqueda ---
 dom.btnSearch.addEventListener('click', async () => {
     const tag = dom.inputTag.value;
     const page = parseInt(dom.inputPage.value);
@@ -81,14 +121,12 @@ dom.btnSearch.addEventListener('click', async () => {
 
     if (!tag) return alert("Escribe un nombre o tag");
 
-    // 🚀 NUEVO: Guardamos la denylist del input en el estado antes de buscar
     state.setDenylist(dom.denylistInput.value);
 
     updateStatus("🔍 Buscando imágenes...");
     dom.btnSearch.disabled = true;
 
     try {
-        // 🚀 CORRECCIÓN CRÍTICA: Enviamos un OBJETO con todo, no argumentos sueltos
         const posts = await ApiService.search({ 
             tag: tag, 
             sources: sources, 
@@ -148,7 +186,6 @@ dom.btnDownloadUntil.addEventListener('click', async () => {
     updateStatus(`🚀 Iniciando descarga masiva...`);
     
     try {
-        // 🚀 NUEVO: Enviamos también los filtros para que la descarga masiva sea coherente
         const res = await ApiService.downloadUntil({ 
             tag, 
             sources, 
@@ -160,6 +197,7 @@ dom.btnDownloadUntil.addEventListener('click', async () => {
         });
         updateStatus(`✅ Masivo terminado: ${res.downloaded} bajadas.`);
     } catch (e) {
+        console.error("Error en la descarga masiva:", e);
         updateStatus("❌ Error en la descarga masiva", 'error');
     }
 });
@@ -183,8 +221,6 @@ async function init() {
         const sources = await ApiService.getSources();
         state.setAvailableSources(sources);
         renderSourceFilters();
-        
-        // 🚀 NUEVO: Dibujar las categorías rápidas al iniciar
         renderCategories();
         
         if (dom.currentPathText) {

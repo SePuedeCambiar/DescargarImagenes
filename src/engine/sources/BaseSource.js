@@ -9,4 +9,9 @@ export default class BaseSource {
     async getPostCounts(tagName) { throw new Error("Not implemented"); }
     async fetchPosts(page, tagName, browser) { throw new Error("Not implemented"); }
     async resolveImageUrl(postUrl, browser) { throw new Error("Not implemented"); }
+    // Añade este método a la clase BaseSource
+    async getSuggestedTags(prefix) { 
+    throw new Error("Este sitio no soporta autocompletado de etiquetas"); 
+    }
+
 }
