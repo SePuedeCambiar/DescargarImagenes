@@ -1,6 +1,13 @@
 import BaseSource from './BaseSource.js';
 
 export default class Rule34Source extends BaseSource {
+    // 🚨 ESTO ES LO NUEVO: Configuración estática para carga automática
+    static config = { 
+        name: 'rule34', 
+        domain: 'rule34.xxx', 
+        pidMult: 42 
+    };
+
     async getPostCounts(tagName, browser) {
         const page = await browser.newPage();
         try {

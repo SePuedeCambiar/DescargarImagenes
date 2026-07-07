@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <!-- Esta línea es la que permite que las imágenes de las Boorus se vean en la UI -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * blob:; script-src 'self'; style-src 'self' 'unsafe-inline';">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Waifu Grabber Pro</title>
     <link rel="stylesheet" href="style.css">
@@ -26,12 +25,26 @@
                     <button id="btnSearch">Buscar</button>
                 </div>
 
-                <!-- 🚨 AQUÍ ESTÁ EL CAMBIO: Ya no hay labels manuales. 
-                     El JS llenará este div dinámicamente basándose en el backend. -->
                 <div class="filters">
+                    <!-- Los checkboxes de fuentes se generan dinámicamente aquí -->
                     <div class="page-control">
                         <span>Página:</span>
                         <input type="number" id="pageNumber" value="1" min="1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 🚀 NUEVO: SECCIÓN DE FILTROS AVANZADOS (Módulo B) -->
+            <div class="advanced-filters">
+                <div class="filter-group">
+                    <label for="denylistInput">🚫 Denylist (Tags a excluir, separados por coma):</label>
+                    <input type="text" id="denylistInput" placeholder="blur, lowres, watermark, text...">
+                </div>
+                
+                <div class="filter-group">
+                    <label>✨ Categorías rápidas (Añadir a la búsqueda):</label>
+                    <div id="categoryToggles" class="category-chips">
+                        <!-- Los chips se generan dinámicamente desde main.js -->
                     </div>
                 </div>
             </div>

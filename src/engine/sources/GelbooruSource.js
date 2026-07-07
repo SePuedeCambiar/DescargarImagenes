@@ -1,6 +1,13 @@
 import BaseSource from './BaseSource.js';
 
 export default class GelbooruSource extends BaseSource {
+    // 🚨 ESTA ES LA PARTE NUEVA: La fuente ahora se describe a sí misma
+    static config = { 
+        name: 'gelbooru', 
+        domain: 'gelbooru.com', 
+        pidMult: 42 
+    };
+
     async getPostCounts(tagName, browser) {
         const page = await browser.newPage();
         try {

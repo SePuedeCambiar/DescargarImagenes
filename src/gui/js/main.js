@@ -16,7 +16,11 @@ const dom = {
     inputTag: document.getElementById('tagName'),
     inputPage: document.getElementById('pageNumber'),
     inputUntilPage: document.getElementById('untilPage'),
-    filtersContainer: document.querySelector('.filters'), // Contenedor para checkboxes dinámicos
+    filtersContainer: document.querySelector('.filters'),
+    
+    // 🚀 NUEVO: Referencias a los filtros avanzados
+    denylistInput: document.getElementById('denylistInput'),
+    categoryToggles: document.getElementById('categoryToggles'),
 };
 
 // ==========================================
@@ -27,7 +31,6 @@ function updateStatus(msg, type = 'info') {
     dom.statusText.style.color = type === 'error' ? 'var(--danger)' : 'var(--success)';
 }
 
-// Buscamos los checks en el momento exacto del click, ya que son dinámicos
 function getSelectedSources() {
     const checks = document.querySelectorAll('.source-check');
     return Array.from(checks)
@@ -35,35 +38,42 @@ function getSelectedSources() {
         .map(cb => cb.value);
 }
 
-// 🎨 Dibuja los checkboxes basándose en las fuentes disponibles en el backend
 function renderSourceFilters() {
-    // Guardamos la referencia al control de página para no borrarlo
     const pageControl = dom.filtersContainer.querySelector('.page-control');
-    
-    // Limpiamos el contenedor de filtros
     dom.filtersContainer.innerHTML = '';
-
-    // Creamos un checkbox por cada fuente disponible en el estado
     state.availableSources.forEach(source => {
         const label = document.createElement('label');
-        label.innerHTML = `
-            <input type="checkbox" class="source-check" value="${source.id}" checked> 
-            ${source.name}
-        `;
+        label.innerHTML = `<input type="checkbox" class="source-check" value="${source.id}" checked> ${source.name}`;
         dom.filtersContainer.appendChild(label);
     });
+    if (pageControl) dom.filtersContainer.appendChild(pageControl);
+}
 
-    // Volvemos a añadir el control de página al final
-    if (pageControl) {
-        dom.filtersContainer.appendChild(pageControl);
-    }
+// 🚀 NUEVO: Lógica de Categorías Rápidas
+const SUGGESTED_CATEGORIES = ['highres', 'absurdres', 'official_art', 'cinematic', 'wallpaper'];
+
+function renderCategories() {
+    if (!dom.categoryToggles) return;
+    dom.categoryToggles.innerHTML = '';
+
+    SUGGESTED_CATEGORIES.forEach(cat => {
+        const chip = document.createElement('div');
+        // Si la categoría está en el state, le ponemos la clase 'active' (color morado)
+        chip.className = `chip ${state.categories.includes(cat) ? 'active' : ''}`;
+        chip.innerText = cat;
+        
+        chip.onclick = () => {
+            state.toggleCategory(cat); // Activa/Desactiva en el estado
+            renderCategories();        // Redibuja para cambiar el color
+        };
+        dom.categoryToggles.appendChild(chip);
+    });
 }
 
 // ==========================================
 // 🚀 MANEJADORES DE EVENTOS (ORQUESTACIÓN)
 // ==========================================
 
-// 1. Acción de Búsqueda
 dom.btnSearch.addEventListener('click', async () => {
     const tag = dom.inputTag.value;
     const page = parseInt(dom.inputPage.value);
@@ -71,15 +81,24 @@ dom.btnSearch.addEventListener('click', async () => {
 
     if (!tag) return alert("Escribe un nombre o tag");
 
+    // 🚀 NUEVO: Guardamos la denylist del input en el estado antes de buscar
+    state.setDenylist(dom.denylistInput.value);
+
     updateStatus("🔍 Buscando imágenes...");
     dom.btnSearch.disabled = true;
 
     try {
-        const posts = await ApiService.search(tag, sources, page);
+        // 🚀 CORRECCIÓN CRÍTICA: Enviamos un OBJETO con todo, no argumentos sueltos
+        const posts = await ApiService.search({ 
+            tag: tag, 
+            sources: sources, 
+            page: page, 
+            categories: state.categories, 
+            denylist: state.denylist 
+        });
         
         state.setPosts(posts);
         state.updateSearch(tag, page, sources);
-        
         GridUI.render(posts);
         
         updateStatus(posts.length > 0 
@@ -94,7 +113,6 @@ dom.btnSearch.addEventListener('click', async () => {
     }
 });
 
-// 2. Acción: Seleccionar Carpeta de Descarga
 dom.btnSelectFolder.addEventListener('click', async () => {
     try {
         const newPath = await ApiService.selectFolder();
@@ -108,21 +126,16 @@ dom.btnSelectFolder.addEventListener('click', async () => {
     }
 });
 
-// 3. Acción: Descargar Página Actual
 dom.btnDownloadPage.addEventListener('click', async () => {
     if (state.posts.length === 0) return alert("No hay imágenes");
-
     updateStatus("📦 Descargando página completa...");
-    
     const res = await ApiService.downloadPage({ 
         posts: state.posts, 
         dir: state.downloadPath 
     });
-    
     updateStatus(`✅ Completado: ${res.downloaded} bajadas.`);
 });
 
-// 4. Acción: Descarga Masiva hasta Página X
 dom.btnDownloadUntil.addEventListener('click', async () => {
     const tag = state.tagName;
     const startPage = state.currentPage;
@@ -132,26 +145,27 @@ dom.btnDownloadUntil.addEventListener('click', async () => {
     if (!tag) return alert("Primero realiza una búsqueda");
     if (endPage < startPage) return alert("La página final debe ser mayor que la actual");
 
-    updateStatus(`🚀 Iniciando descarga masiva hasta la pág ${endPage}...`);
+    updateStatus(`🚀 Iniciando descarga masiva...`);
     
     try {
+        // 🚀 NUEVO: Enviamos también los filtros para que la descarga masiva sea coherente
         const res = await ApiService.downloadUntil({ 
             tag, 
             sources, 
             startPage, 
             endPage, 
-            dir: state.downloadPath 
+            dir: state.downloadPath,
+            categories: state.categories,
+            denylist: state.denylist
         });
-        updateStatus(`✅ Masivo terminado: ${res.downloaded} bajadas, ${res.skipped} repetidas.`);
+        updateStatus(`✅ Masivo terminado: ${res.downloaded} bajadas.`);
     } catch (e) {
         updateStatus("❌ Error en la descarga masiva", 'error');
     }
 });
 
-// 5. Acción: Limpiar Logs
 dom.btnClearLogs.addEventListener('click', async () => {
     if (!confirm("¿Estás seguro de borrar el historial de hashes?")) return;
-
     try {
         await ApiService.clearLogs();
         alert("Historial de hashes limpiado correctamente");
@@ -165,18 +179,17 @@ dom.btnClearLogs.addEventListener('click', async () => {
 // ==========================================
 async function init() {
     console.log("🌸 Waifu Grabber UI Initializing...");
-    
     try {
-        // 1. Carga dinámica de fuentes desde el Backend
         const sources = await ApiService.getSources();
         state.setAvailableSources(sources);
         renderSourceFilters();
         
-        // 2. Configuración de ruta inicial
+        // 🚀 NUEVO: Dibujar las categorías rápidas al iniciar
+        renderCategories();
+        
         if (dom.currentPathText) {
             dom.currentPathText.innerText = state.downloadPath;
         }
-        
         updateStatus("Listo para buscar");
     } catch (e) {
         console.error("Error en init:", e);

@@ -1,6 +1,13 @@
 import BaseSource from './BaseSource.js';
 
 export default class SafebooruSource extends BaseSource {
+    // 🚀 ESTO ES LO NUEVO: Configuración estática para la carga automática
+    static config = { 
+        name: 'safebooru', 
+        domain: 'safebooru.org', 
+        pidMult: 42 
+    };
+
     async getPostCounts(tagName, browser) {
         const page = await browser.newPage();
         try {
@@ -28,7 +35,7 @@ export default class SafebooruSource extends BaseSource {
             await pageObj.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
             
             return await pageObj.evaluate((sourceName) => {
-                const selector = '.thumbnail-preview'; // Igual que Gelbooru
+                const selector = '.thumbnail-preview'; 
                 const elements = Array.from(document.querySelectorAll(selector));
                 return elements.map(el => {
                     const a = el.querySelector('a');

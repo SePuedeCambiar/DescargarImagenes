@@ -1,6 +1,13 @@
 import BaseSource from './BaseSource.js';
 
 export default class DanbooruSource extends BaseSource {
+    // 🚨 AÑADE ESTO: La fuente ahora se describe a sí misma para el cargador automático
+    static config = { 
+        name: 'danbooru', 
+        domain: 'danbooru.donmai.us', 
+        pidMult: 42 
+    };
+
     async getPostCounts(tagName) {
         try {
             const url = `https://danbooru.donmai.us/counts/posts.json?tags=${encodeURIComponent(tagName)}`;
@@ -43,7 +50,6 @@ export default class DanbooruSource extends BaseSource {
     }
 
     async resolveImageUrl(postUrl, browser) {
-        // Danbooru suele dar la URL directa en el JSON, pero si no:
         const page = await browser.newPage();
         try {
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');

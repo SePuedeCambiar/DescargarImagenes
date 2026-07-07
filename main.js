@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
-// ❗ IMPORTANTE: Ruta actualizada al nuevo nombre del archivo
 import WaifuGrabberEngine from './src/engine/GrabberEngine.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,7 +12,6 @@ let mainWindow;
 // =============================================================================
 // 🛡️ INTERCEPTOR DE HEADERS
 // =============================================================================
-// Esto evita que las Boorus bloqueen las imágenes por falta de Referer
 function setupHeaderInterceptor() {
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         const url = details.url;
@@ -40,11 +38,10 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
-            webSecurity: false // Necesario para cargar imágenes de dominios externos
+            webSecurity: false 
         }
     });
 
-    // Cargamos el HTML
     mainWindow.loadFile('src/gui/index.html');
 }
 
@@ -52,7 +49,7 @@ function createWindow() {
 // 🔌 MANEJADORES DE COMUNICACIÓN (IPC)
 // =============================================================================
 
-// NUEVO: Obtener la lista de fuentes disponibles dinámicamente
+// Obtener la lista de fuentes disponibles dinámicamente
 ipcMain.handle('get-sources', async () => {
     try {
         return engine.getAvailableSources();
@@ -65,7 +62,14 @@ ipcMain.handle('get-sources', async () => {
 // Búsqueda simple (Galería)
 ipcMain.handle('search-images', async (event, args) => {
     try {
-        return await engine.fetchPosts(args.tag, args.sources, args.page);
+        // 🚀 NUEVO: Ahora pasamos categorías y denylist al motor
+        return await engine.fetchPosts(
+            args.tag, 
+            args.sources, 
+            args.page, 
+            args.categories || [], 
+            args.denylist || ''
+        );
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda:`, error);
         throw error;
@@ -75,11 +79,18 @@ ipcMain.handle('search-images', async (event, args) => {
 // Búsqueda masiva
 ipcMain.handle('search-all-images', async (event, args) => {
     try {
-        return await engine.fetchAllPages(args.tag, args.sources, (progress) => {
-            if (mainWindow) {
-                mainWindow.webContents.send('search-progress', progress);
-            }
-        });
+        // 🚀 NUEVO: También pasamos los filtros en la búsqueda masiva
+        return await engine.fetchAllPages(
+            args.tag, 
+            args.sources, 
+            (progress) => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('search-progress', progress);
+                }
+            },
+            args.categories || [], 
+            args.denylist || ''
+        );
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda masiva:`, error);
         throw error;
@@ -107,7 +118,7 @@ ipcMain.handle('download-page', async (event, { posts, dir }) => {
 });
 
 // Descarga masiva hasta página X
-ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, endPage, dir }) => {
+ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, endPage, dir, categories, denylist }) => {
     let results = { downloaded: 0, skipped: 0, currentPage: 0 };
     
     try {
@@ -120,7 +131,15 @@ ipcMain.handle('download-until-page', async (event, { tag, sources, startPage, e
                 });
             }
 
-            const posts = await engine.fetchPosts(tag, sources, p);
+            // 🚀 NUEVO: Pasamos los filtros al motor en cada página de la descarga masiva
+            const posts = await engine.fetchPosts(
+                tag, 
+                sources, 
+                p, 
+                categories || [], 
+                denylist || ''
+            );
+            
             for (const post of posts) {
                 const res = await engine.downloadImage(post, dir);
                 res.success ? results.downloaded++ : results.skipped++;
@@ -150,9 +169,16 @@ ipcMain.handle('dialog:openDirectory', async () => {
 // =============================================================================
 // 🚀 CICLO DE VIDA DE LA APP
 // =============================================================================
-app.whenReady().then(() => {
-    setupHeaderInterceptor();
-    createWindow();
+
+app.whenReady().then(async () => {
+    try {
+        await engine.initialize(); 
+        console.log("✅ Motor inicializado y fuentes cargadas.");
+        setupHeaderInterceptor();
+        createWindow();
+    } catch (error) {
+        console.error("❌ Error crítico durante la inicialización de la app:", error);
+    }
 });
 
 app.on('window-all-closed', () => {
