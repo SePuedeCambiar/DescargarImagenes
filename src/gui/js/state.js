@@ -1,28 +1,23 @@
-// src/gui/js/state.js
-
 export const state = {
-    // 📊 Datos Generales (Volátiles - No se guardan en config.json)
+    // 📊 Datos Generales (Volátiles)
     posts: [],
     tagName: '',
     currentPage: 1,
     availableSources: [], 
     isDownloading: false,
+    displayedCount: 0,      // 🚀 AÑADIDO: Para controlar la carga incremental (paginación de UI)
 
     // ⚙️ Configuración Persistente (Se guardan en config.json)
     selectedSources: [],
     downloadPath: './downloads',
-    apiKey: '',             // <--- AÑADIDO: Para persistir la API Key de Danbooru
-    denylist: '',           // Ejemplo: "blur, lowres, watermark"
-    categories: [],         // Ejemplo: ["highres", "absurdres"]
+    apiKey: '',
+    denylist: '',
+    categories: [],
 
     // =========================================================================
     // 💾 MÉTODOS DE PERSISTENCIA
     // =========================================================================
 
-    /**
-     * Carga los datos desde el objeto de configuración recibido del Backend
-     * @param {Object} config 
-     */
     loadConfig(config) {
         console.log("[State] Hidratando estado desde configuración persistente...");
         this.downloadPath = config.downloadPath || this.downloadPath;
@@ -32,9 +27,6 @@ export const state = {
         this.selectedSources = config.selectedSources || [];
     },
 
-    /**
-     * Devuelve un objeto limpio con solo los datos que deben persistirse en disco
-     */
     getConfig() {
         return {
             downloadPath: this.downloadPath,
@@ -52,6 +44,12 @@ export const state = {
     setPosts(newPosts) {
         console.log(`[State] Actualizando posts. Cantidad: ${newPosts.length}`);
         this.posts = newPosts;
+        this.displayedCount = 0; // 🚀 Resetear el contador al recibir nuevos resultados
+    },
+
+    // 🚀 Método para incrementar el contador de lo que ya se ve en pantalla
+    addDisplayedCount(amount) {
+        this.displayedCount += amount;
     },
 
     updateSearch(tag, page, sources) {

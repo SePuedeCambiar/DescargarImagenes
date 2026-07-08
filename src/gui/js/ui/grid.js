@@ -4,23 +4,51 @@ import { ApiService } from '../api.js';
 export const GridUI = {
     render(posts) {
         const grid = document.getElementById('resultsGrid');
-        grid.innerHTML = '';
+        grid.innerHTML = ''; // Limpia todo
         
         if (posts.length === 0) {
             grid.innerHTML = '<div class="placeholder-text">No se encontraron imágenes...</div>';
             return;
         }
 
-        // 🚀 CAMBIO: Añadimos 'index' al forEach para saber qué posición tiene la imagen
-        posts.forEach((post, index) => {
-            const card = this.createCard(post, index);
-            grid.appendChild(card);
-        });
-
+        // Cargamos el primer bloque (20 imágenes)
+        this.appendPosts(); 
         document.getElementById('globalControls').classList.remove('hidden');
     },
 
-    createCard(post, index) { // 🚀 Recibe el índice
+    appendPosts() {
+        const grid = document.getElementById('resultsGrid');
+        const chunkSize = 20;
+        
+        // Eliminamos el botón "Cargar más" anterior si existe antes de añadir nuevas
+        const existingBtn = document.getElementById('btnLoadMore');
+        if (existingBtn) existingBtn.remove();
+
+        const start = state.displayedCount;
+        const end = Math.min(start + chunkSize, state.posts.length);
+        
+        const fragment = document.createDocumentFragment();
+        
+        for (let i = start; i < end; i++) {
+            const card = this.createCard(state.posts[i], i);
+            fragment.appendChild(card);
+        }
+        
+        grid.appendChild(fragment);
+        state.displayedCount = end;
+        
+        // Si aún quedan imágenes por mostrar, añadimos el botón al final
+        if (state.displayedCount < state.posts.length) {
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.id = 'btnLoadMore';
+            loadMoreBtn.className = 'btn-load-more';
+            loadMoreBtn.innerText = `Cargar más (${state.posts.length - state.displayedCount} restantes)`;
+            loadMoreBtn.onclick = () => this.appendPosts();
+            grid.appendChild(loadMoreBtn);
+        }
+    },
+
+    createCard(post, index) {
         const card = document.createElement('div');
         card.className = 'image-card';
         
@@ -35,20 +63,15 @@ export const GridUI = {
             </div>
         `;
 
-        // 🖼️ EVENTO: Abrir Lightbox al hacer clic en la imagen
         const img = card.querySelector('img');
         img.addEventListener('click', () => {
-            // Llamamos a la función que definimos en main.js
             if (window.openLightbox) {
                 window.openLightbox(index);
-            } else {
-                console.error("La función openLightbox no está definida en window");
             }
         });
 
-        // Evento de descarga
         card.querySelector('.btn-dl-small').addEventListener('click', async (e) => {
-            e.stopPropagation(); // Evita que al descargar también se abra el lightbox
+            e.stopPropagation();
             await this.handleDownload(post);
         });
 
@@ -60,11 +83,7 @@ export const GridUI = {
         status.innerText = `📥 Descargando ${post.id}...`;
         
         try {
-            const res = await ApiService.downloadSingle({ 
-                post: post, 
-                dir: state.downloadPath 
-            });
-            
+            const res = await ApiService.downloadSingle({ post: post, dir: state.downloadPath });
             status.innerText = res.success ? `✅ Guardado: ${post.id}` : `❌ ${res.message}`;
         } catch (e) {
             console.error(e);

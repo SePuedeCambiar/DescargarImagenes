@@ -340,3 +340,24 @@ button {
     color: var(--text-dim);
     font-size: 16px;
 }
+
+/* Botón Cargar Más */
+.btn-load-more {
+    grid-column: 1 / -1; /* Ocupa todo el ancho del grid */
+    margin: 20px auto;
+    padding: 15px 30px;
+    background-color: #2d2d2d;
+    color: var(--text-main);
+    border: 2px solid var(--accent);
+    border-radius: 50px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+    width: fit-content;
+}
+
+.btn-load-more:hover {
+    background-color: var(--accent);
+    color: #000;
+    transform: scale(1.05);
+}
