@@ -107,6 +107,7 @@ function openLightbox(index) {
     document.body.style.overflow = 'hidden'; 
 }
 
+// Exponemos la función al window para que grid.js pueda llamarla
 window.openLightbox = openLightbox; 
 
 function updateLightboxImage() {
@@ -209,11 +210,14 @@ dom.btnSearch.addEventListener('click', async () => {
             denylist: state.denylist 
         });
         
+        // 1. Guardamos los posts en el estado
         state.setPosts(posts);
+        
+        // 2. Guardamos los parámetros actuales para que GridUI sepa cómo pedir más páginas
         state.updateSearch(tag, page, sources);
         
-        // 🚀 IMPORTANTE: Pasamos openLightbox como segundo argumento al Grid
-        GridUI.render(posts, openLightbox); 
+        // 3. Renderizamos (Aquí GridUI hará la carga de 3 en 3)
+        GridUI.render(posts); 
         
         updateStatus(posts.length > 0 
             ? `✅ Se encontraron ${posts.length} imágenes.` 
