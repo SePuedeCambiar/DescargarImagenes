@@ -1,20 +1,54 @@
 // src/gui/js/state.js
 
 export const state = {
-    // 📊 Datos Generales
+    // 📊 Datos Generales (Volátiles - No se guardan en config.json)
     posts: [],
     tagName: '',
     currentPage: 1,
-    selectedSources: [],
     availableSources: [], 
-    downloadPath: './downloads',
     isDownloading: false,
 
-    // 🛠️ Filtros Avanzados (Módulo B)
-    denylist: '',        // Ejemplo: "blur, lowres, watermark"
-    categories: [],      // Ejemplo: ["highres", "absurdres"]
+    // ⚙️ Configuración Persistente (Se guardan en config.json)
+    selectedSources: [],
+    downloadPath: './downloads',
+    apiKey: '',             // <--- AÑADIDO: Para persistir la API Key de Danbooru
+    denylist: '',           // Ejemplo: "blur, lowres, watermark"
+    categories: [],         // Ejemplo: ["highres", "absurdres"]
 
-    // ⚙️ Métodos para modificar los datos
+    // =========================================================================
+    // 💾 MÉTODOS DE PERSISTENCIA
+    // =========================================================================
+
+    /**
+     * Carga los datos desde el objeto de configuración recibido del Backend
+     * @param {Object} config 
+     */
+    loadConfig(config) {
+        console.log("[State] Hidratando estado desde configuración persistente...");
+        this.downloadPath = config.downloadPath || this.downloadPath;
+        this.apiKey = config.apiKey || '';
+        this.denylist = config.denylist || '';
+        this.categories = config.categories || [];
+        this.selectedSources = config.selectedSources || [];
+    },
+
+    /**
+     * Devuelve un objeto limpio con solo los datos que deben persistirse en disco
+     */
+    getConfig() {
+        return {
+            downloadPath: this.downloadPath,
+            apiKey: this.apiKey,
+            denylist: this.denylist,
+            categories: this.categories,
+            selectedSources: this.selectedSources
+        };
+    },
+
+    // =========================================================================
+    // ⚙️ MÉTODOS DE ACTUALIZACIÓN (Setters)
+    // =========================================================================
+
     setPosts(newPosts) {
         console.log(`[State] Actualizando posts. Cantidad: ${newPosts.length}`);
         this.posts = newPosts;
@@ -37,22 +71,18 @@ export const state = {
         this.availableSources = sources;
     },
 
-    // --- MÉTODOS DEL MÓDULO B ---
+    // --- MÉTODOS DE FILTROS (MÓDULO B) ---
 
-    // Guarda la lista de tags prohibidos
     setDenylist(list) {
         console.log(`[State] Denylist actualizada: ${list}`);
         this.denylist = list;
     },
 
-    // Activa o desactiva una categoría (Toggle)
     toggleCategory(category) {
         if (this.categories.includes(category)) {
-            // Si ya existe, la quitamos
             this.categories = this.categories.filter(cat => cat !== category);
             console.log(`[State] Categoría desactivada: ${category}`);
         } else {
-            // Si no existe, la añadimos
             this.categories.push(category);
             console.log(`[State] Categoría activada: ${category}`);
         }

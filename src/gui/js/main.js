@@ -17,15 +17,29 @@ const dom = {
     inputPage: document.getElementById('pageNumber'),
     inputUntilPage: document.getElementById('untilPage'),
     filtersContainer: document.querySelector('.filters'),
-    
-    // Referencias a los filtros avanzados
     denylistInput: document.getElementById('denylistInput'),
     categoryToggles: document.getElementById('categoryToggles'),
-    
-    // 🚀 Referencias para Autocompletado y API
     tagSuggestions: document.getElementById('tagSuggestions'),
-    apiKey: document.getElementById('apiKey'), // <--- AÑADIDO: Input de la API Key
+    apiKey: document.getElementById('apiKey'), 
 };
+
+// 🖼️ Elementos del Lightbox
+const lbDom = {
+    container: document.getElementById('lightbox'),
+    img: document.getElementById('lightboxImg'),
+    close: document.getElementById('closeLightbox'),
+    prev: document.getElementById('btnPrev'),
+    next: document.getElementById('btnNext'),
+    slideshow: document.getElementById('btnSlideshow'),
+    interval: document.getElementById('slideshowInterval'),
+    counter: document.getElementById('lightboxCounter')
+};
+
+// ==========================================
+// ⚙️ ESTADO DEL VISOR (Lightbox)
+// ==========================================
+let currentImageIndex = 0;
+let slideshowTimer = null;
 
 // ==========================================
 // 🛠️ FUNCIONES DE APOYO (UI)
@@ -33,6 +47,15 @@ const dom = {
 function updateStatus(msg, type = 'info') {
     dom.statusText.innerText = msg;
     dom.statusText.style.color = type === 'error' ? 'var(--danger)' : 'var(--success)';
+}
+
+async function persistSettings() {
+    try {
+        await ApiService.saveConfig(state.getConfig());
+        console.log("[UI] Configuración guardada exitosamente.");
+    } catch (e) {
+        console.error("Error guardando configuración:", e);
+    }
 }
 
 function getSelectedSources() {
@@ -46,8 +69,9 @@ function renderSourceFilters() {
     const pageControl = dom.filtersContainer.querySelector('.page-control');
     dom.filtersContainer.innerHTML = '';
     state.availableSources.forEach(source => {
+        const isChecked = state.selectedSources.includes(source.id) || state.selectedSources.length === 0;
         const label = document.createElement('label');
-        label.innerHTML = `<input type="checkbox" class="source-check" value="${source.id}" checked> ${source.name}`;
+        label.innerHTML = `<input type="checkbox" class="source-check" value="${source.id}" ${isChecked ? 'checked' : ''}> ${source.name}`;
         dom.filtersContainer.appendChild(label);
     });
     if (pageControl) dom.filtersContainer.appendChild(pageControl);
@@ -64,41 +88,94 @@ function renderCategories() {
         chip.className = `chip ${state.categories.includes(cat) ? 'active' : ''}`;
         chip.innerText = cat;
         
-        chip.onclick = () => {
+        chip.onclick = async () => {
             state.toggleCategory(cat);
             renderCategories();
+            await persistSettings();
         };
         dom.categoryToggles.appendChild(chip);
     });
 }
 
 // ==========================================
+// 🖼️ LÓGICA DEL LIGHTBOX Y SLIDESHOW
+// ==========================================
+function openLightbox(index) {
+    currentImageIndex = index;
+    updateLightboxImage();
+    lbDom.container.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; 
+}
+
+window.openLightbox = openLightbox; 
+
+function updateLightboxImage() {
+    const post = state.posts[currentImageIndex];
+    if (!post) return;
+    lbDom.img.src = post.url;
+    lbDom.counter.innerText = `${currentImageIndex + 1} / ${state.posts.length}`;
+}
+
+function nextImage() {
+    currentImageIndex = (currentImageIndex + 1) % state.posts.length;
+    updateLightboxImage();
+}
+
+function prevImage() {
+    currentImageIndex = (currentImageIndex - 1 + state.posts.length) % state.posts.length;
+    updateLightboxImage();
+}
+
+function toggleSlideshow() {
+    if (slideshowTimer) {
+        clearInterval(slideshowTimer);
+        slideshowTimer = null;
+        lbDom.slideshow.innerText = "▶️ Auto";
+        lbDom.slideshow.classList.replace('btn-danger', 'btn-secondary');
+    } else {
+        const seconds = parseInt(lbDom.interval.value) || 3;
+        slideshowTimer = setInterval(nextImage, seconds * 1000);
+        lbDom.slideshow.innerText = "⏹️ Stop";
+        lbDom.slideshow.classList.replace('btn-secondary', 'btn-danger');
+    }
+}
+
+// Eventos del Lightbox
+lbDom.close.onclick = () => {
+    lbDom.container.classList.add('hidden');
+    if (slideshowTimer) toggleSlideshow();
+    document.body.style.overflow = 'auto';
+};
+lbDom.next.onclick = nextImage;
+lbDom.prev.onclick = prevImage;
+lbDom.slideshow.onclick = toggleSlideshow;
+
+// Teclado
+window.addEventListener('keydown', (e) => {
+    if (lbDom.container.classList.contains('hidden')) return;
+    if (e.key === 'ArrowRight') nextImage();
+    if (e.key === 'ArrowLeft') prevImage();
+    if (e.key === 'Escape') lbDom.close.onclick();
+});
+
+// ==========================================
 // 🚀 MANEJADORES DE EVENTOS (ORQUESTACIÓN)
 // ==========================================
 
-// --- 💡 Lógica de Autocompletado (Debounce) ---
 let debounceTimer; 
-
 dom.inputTag.addEventListener('input', async () => {
     const prefix = dom.inputTag.value.trim();
-    
     clearTimeout(debounceTimer);
-    
     if (prefix.length < 3) {
         dom.tagSuggestions.innerHTML = '';
         return;
     }
-
     debounceTimer = setTimeout(async () => {
         try {
-            // 🚀 CORRECCIÓN: Enviamos un objeto con el prefijo y la API Key
             const suggestions = await ApiService.getSuggestions({ 
                 prefix: prefix,
-                apiKey: dom.apiKey ? dom.apiKey.value : '' 
+                apiKey: dom.apiKey ? dom.apiKey.value : state.apiKey 
             });
-            
-            console.log("🚀 Sugerencias recibidas en la UI:", suggestions);
-            
             dom.tagSuggestions.innerHTML = '';
             if (suggestions && suggestions.length > 0) {
                 suggestions.forEach(tag => {
@@ -113,16 +190,13 @@ dom.inputTag.addEventListener('input', async () => {
     }, 300);
 });
 
-// --- Búsqueda ---
 dom.btnSearch.addEventListener('click', async () => {
     const tag = dom.inputTag.value;
     const page = parseInt(dom.inputPage.value);
     const sources = getSelectedSources();
-
     if (!tag) return alert("Escribe un nombre o tag");
 
     state.setDenylist(dom.denylistInput.value);
-
     updateStatus("🔍 Buscando imágenes...");
     dom.btnSearch.disabled = true;
 
@@ -137,12 +211,13 @@ dom.btnSearch.addEventListener('click', async () => {
         
         state.setPosts(posts);
         state.updateSearch(tag, page, sources);
-        GridUI.render(posts);
+        
+        // 🚀 IMPORTANTE: Pasamos openLightbox como segundo argumento al Grid
+        GridUI.render(posts, openLightbox); 
         
         updateStatus(posts.length > 0 
             ? `✅ Se encontraron ${posts.length} imágenes.` 
             : "😢 No se encontraron imágenes.");
-            
     } catch (e) {
         console.error(e);
         updateStatus("❌ Error en la búsqueda", 'error');
@@ -157,6 +232,7 @@ dom.btnSelectFolder.addEventListener('click', async () => {
         if (newPath) {
             state.setDownloadPath(newPath);
             dom.currentPathText.innerText = newPath;
+            await persistSettings();
             updateStatus(`✅ Ruta cambiada a: ${newPath}`);
         }
     } catch (e) {
@@ -164,13 +240,20 @@ dom.btnSelectFolder.addEventListener('click', async () => {
     }
 });
 
+dom.apiKey.addEventListener('blur', async () => {
+    state.apiKey = dom.apiKey.value;
+    await persistSettings();
+});
+
+dom.denylistInput.addEventListener('blur', async () => {
+    state.setDenylist(dom.denylistInput.value);
+    await persistSettings();
+});
+
 dom.btnDownloadPage.addEventListener('click', async () => {
     if (state.posts.length === 0) return alert("No hay imágenes");
     updateStatus("📦 Descargando página completa...");
-    const res = await ApiService.downloadPage({ 
-        posts: state.posts, 
-        dir: state.downloadPath 
-    });
+    const res = await ApiService.downloadPage({ posts: state.posts, dir: state.downloadPath });
     updateStatus(`✅ Completado: ${res.downloaded} bajadas.`);
 });
 
@@ -179,21 +262,13 @@ dom.btnDownloadUntil.addEventListener('click', async () => {
     const startPage = state.currentPage;
     const endPage = parseInt(dom.inputUntilPage.value);
     const sources = state.selectedSources;
-
     if (!tag) return alert("Primero realiza una búsqueda");
     if (endPage < startPage) return alert("La página final debe ser mayor que la actual");
 
     updateStatus(`🚀 Iniciando descarga masiva...`);
-    
     try {
         const res = await ApiService.downloadUntil({ 
-            tag, 
-            sources, 
-            startPage, 
-            endPage, 
-            dir: state.downloadPath,
-            categories: state.categories,
-            denylist: state.denylist
+            tag, sources, startPage, endPage, dir: state.downloadPath, categories: state.categories, denylist: state.denylist
         });
         updateStatus(`✅ Masivo terminado: ${res.downloaded} bajadas.`);
     } catch (e) {
@@ -212,20 +287,18 @@ dom.btnClearLogs.addEventListener('click', async () => {
     }
 });
 
-// ==========================================
-// 🏁 INICIALIZACIÓN
-// ==========================================
 async function init() {
     console.log("🌸 Waifu Grabber UI Initializing...");
     try {
+        const config = await ApiService.getConfig();
+        state.loadConfig(config);
+        if (dom.currentPathText) dom.currentPathText.innerText = state.downloadPath;
+        if (dom.denylistInput) dom.denylistInput.value = state.denylist;
+        if (dom.apiKey) dom.apiKey.value = state.apiKey;
         const sources = await ApiService.getSources();
         state.setAvailableSources(sources);
         renderSourceFilters();
         renderCategories();
-        
-        if (dom.currentPathText) {
-            dom.currentPathText.innerText = state.downloadPath;
-        }
         updateStatus("Listo para buscar");
     } catch (e) {
         console.error("Error en init:", e);

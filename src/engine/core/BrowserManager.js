@@ -36,11 +36,12 @@ class BrowserManager {
                 headless: 'new',
                 userDataDir: path.join(app.getPath('userData'), 'session_boorus'),
                 args: [
-                    '--no-sandbox', 
-                    '--disable-setuid-sandbox', 
-                    '--disable-dev-shm-usage', 
-                    '--disable-blink-features=AutomationControlled'
-                ]
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--single-process', // <--- Intenta añadir esto si el problema persiste
+    '--disable-extensions',
+                ],
             });
         }
         return this.instance;

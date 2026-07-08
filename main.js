@@ -2,6 +2,11 @@ import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import WaifuGrabberEngine from './src/engine/GrabberEngine.js';
+import configService from './src/engine/ConfigService.js'; // 💾 IMPORTADO: Servicio de Persistencia
+
+
+let currentImageIndex = 0;
+let slideshowTimer = null;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,7 +15,7 @@ const engine = new WaifuGrabberEngine();
 let mainWindow;
 
 // =============================================================================
-// 🛡️ INTERCEPTOR DE HEADERS
+// 🛡️ INTERCEPTOR DE HEADERS (Evita bloqueos de Boorus)
 // =============================================================================
 function setupHeaderInterceptor() {
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
@@ -72,8 +77,6 @@ ipcMain.handle('get-tag-suggestions', async (event, params) => {
 // 2. Búsqueda
 ipcMain.handle('search-images', async (event, args) => {
     try {
-        // 🚀 Pasamos el objeto args completo. 
-        // GrabberEngine.fetchPosts(params) ahora lo recibirá correctamente.
         return await engine.fetchPosts(args); 
     } catch (error) {
         console.error(`[MAIN] Error en búsqueda:`, error);
@@ -84,7 +87,6 @@ ipcMain.handle('search-images', async (event, args) => {
 
 ipcMain.handle('search-all-images', async (event, args) => {
     try {
-        // Adaptamos la llamada a fetchAllPages para que use el objeto de parámetros
         return await engine.fetchAllPages(args, (progress) => {
             if (mainWindow) {
                 mainWindow.webContents.send('search-progress', progress);
@@ -129,7 +131,6 @@ ipcMain.handle('download-until-page', async (event, args) => {
                 });
             }
 
-            // 🚀 CORRECCIÓN: Llamamos a fetchPosts pasando un OBJETO
             const posts = await engine.fetchPosts({
                 tag, 
                 sources, 
@@ -150,7 +151,7 @@ ipcMain.handle('download-until-page', async (event, args) => {
     }
 });
 
-// 4. Utilidades
+// 4. Utilidades y Diálogos
 ipcMain.handle('clear-logs', async () => {
     return engine.clearLogs();
 });
@@ -161,6 +162,25 @@ ipcMain.handle('dialog:openDirectory', async () => {
     });
     if (canceled) return null;
     return filePaths[0];
+});
+
+// 5. 💾 GESTIÓN DE CONFIGURACIÓN PERSISTENTE (NUEVO)
+ipcMain.handle('get-config', async () => {
+    try {
+        return configService.load();
+    } catch (error) {
+        console.error("[MAIN] Error cargando configuración:", error);
+        return {};
+    }
+});
+
+ipcMain.handle('save-config', async (event, config) => {
+    try {
+        return configService.save(config);
+    } catch (error) {
+        console.error("[MAIN] Error guardando configuración:", error);
+        return { success: false, error };
+    }
 });
 
 // =============================================================================
@@ -187,3 +207,14 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
+
+app.on('window-all-closed', async () => {
+    if (process.platform !== 'darwin') {
+        // 🚀 IMPORTANTE: Avisar al motor que cierre el navegador antes de salir
+        if (engine && engine.browserManager) {
+            await engine.browserManager.close(); 
+        }
+        app.quit();
+    }
+});
+

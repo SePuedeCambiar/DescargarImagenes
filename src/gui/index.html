@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <!-- Esta línea es la que permite que las imágenes de las Boorus se vean en la UI -->
+    <!-- Política de seguridad para permitir imágenes de Boorus y scripts locales -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * blob:; script-src 'self'; style-src 'self' 'unsafe-inline';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Waifu Grabber Pro</title>
@@ -17,7 +17,6 @@
             
             <div class="search-section">
                 <div class="input-group">
-                    <!-- El atributo list conecta este input con el datalist de abajo -->
                     <input type="text" id="tagName" placeholder="Nombre del personaje / Tag..." list="tagSuggestions">
                     <select id="mode">
                         <option value="nsfw">🔥 NSFW</option>
@@ -27,7 +26,6 @@
                 </div>
 
                 <div class="filters">
-                    <!-- Los checkboxes de fuentes se generan dinámicamente aquí desde main.js -->
                     <div class="page-control">
                         <span>Página:</span>
                         <input type="number" id="pageNumber" value="1" min="1">
@@ -35,34 +33,29 @@
                 </div>
             </div>
 
-            <!-- 🚀 SECCIÓN DE FILTROS AVANZADOS (Módulo B) -->
+            <!-- SECCIÓN DE FILTROS AVANZADOS -->
             <div class="advanced-filters">
-                <!-- FILA 1: Denylist -->
                 <div class="filter-group">
-                    <label for="denylistInput">🚫 Denylist (Tags a excluir, separados por coma):</label>
-                    <input type="text" id="denylistInput" placeholder="blur, lowres, watermark, text...">
+                    <label for="denylistInput">🚫 Denylist (Tags a excluir):</label>
+                    <input type="text" id="denylistInput" placeholder="blur, lowres, watermark...">
                 </div>
 
-                <!-- FILA 2: Configuración de API (Para Autocompletado rápido) -->
                 <div class="filter-group">
-                    <label for="apiKey">🔑 Danbooru API Key (Opcional para autocompletado):</label>
-                    <input type="password" id="apiKey" placeholder="Introduce tu API Key aquí...">
+                    <label for="apiKey">🔑 Danbooru API Key:</label>
+                    <input type="password" id="apiKey" placeholder="Introduce tu API Key...">
                 </div>
                 
-                <!-- FILA 3: Categorías -->
                 <div class="filter-group">
-                    <label>✨ Categorías rápidas (Añadir a la búsqueda):</label>
+                    <label>✨ Categorías rápidas:</label>
                     <div id="categoryToggles" class="category-chips">
-                        <!-- Los chips se generan dinámicamente desde main.js -->
+                        <!-- Chips generados dinámicamente -->
                     </div>
                 </div>
             </div>
         </header>
 
-        <!-- CONTROLES GLOBALES: Solo aparecen al haber resultados -->
+        <!-- CONTROLES GLOBALES (Aparecen al haber resultados) -->
         <div id="globalControls" class="global-controls hidden">
-            
-            <!-- Fila para la selección de carpeta -->
             <div class="folder-selection">
                 <button id="btnSelectFolder" class="btn-secondary">📁 Seleccionar Carpeta</button>
                 <span id="currentPathText" class="path-text">./downloads</span>
@@ -83,16 +76,47 @@
 
         <!-- GRID DE RESULTADOS -->
         <div id="resultsGrid" class="results-grid">
-            <!-- Aquí se cargarán las imágenes dinámicamente -->
             <div class="placeholder-text">Ingresa un nombre y presiona buscar...</div>
         </div>
     </div>
 
-    <!-- 🚀 ELEMENTO CRÍTICO PARA EL AUTOCOMPLETADO -->
-    <!-- Este elemento es invisible, pero es donde JS inserta las opciones de tags -->
+    <!-- 🚀 VISUALIZADOR DE IMÁGENES (LIGHTBOX) -->
+    <!-- Este div está fuera de app-container para que flote sobre todo el software -->
+    <div id="lightbox" class="lightbox hidden">
+        <!-- Botón de cerrar -->
+        <span id="closeLightbox" class="lightbox-close">&times;</span>
+        
+        <!-- Contador de imagen (ej: 1 / 50) -->
+        <div id="lightboxCounter" class="lightbox-counter">1 / 1</div>
+
+        <!-- Contenedor de la imagen -->
+        <div class="lightbox-content">
+            <img id="lightboxImg" src="" alt="Full View">
+        </div>
+
+        <!-- Barra de navegación inferior -->
+        <div class="lightbox-nav">
+            <!-- Botón Anterior -->
+            <button id="btnPrev" class="nav-btn">⬅️</button>
+            
+            <!-- Controles de Slideshow -->
+            <div class="slideshow-controls">
+                <button id="btnSlideshow" class="btn-secondary">▶️ Auto</button>
+                <div class="interval-group">
+                    <span>Seg:</span>
+                    <input type="number" id="slideshowInterval" value="3" min="1" max="60">
+                </div>
+            </div>
+
+            <!-- Botón Siguiente -->
+            <button id="btnNext" class="nav-btn">➡️</button>
+        </div>
+    </div>
+
+    <!-- Datalist para autocompletado de tags -->
     <datalist id="tagSuggestions"></datalist>
 
-    <!-- Cargamos el orquestador del frontend como módulo -->
+    <!-- Scripts -->
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

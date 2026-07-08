@@ -1,4 +1,3 @@
-// src/gui/js/ui/grid.js
 import { state } from '../state.js';
 import { ApiService } from '../api.js';
 
@@ -12,40 +11,55 @@ export const GridUI = {
             return;
         }
 
-        posts.forEach(post => {
-            const card = this.createCard(post);
+        // 🚀 CAMBIO: Añadimos 'index' al forEach para saber qué posición tiene la imagen
+        posts.forEach((post, index) => {
+            const card = this.createCard(post, index);
             grid.appendChild(card);
         });
 
         document.getElementById('globalControls').classList.remove('hidden');
     },
 
-    createCard(post) {
+    createCard(post, index) { // 🚀 Recibe el índice
         const card = document.createElement('div');
         card.className = 'image-card';
         
         card.innerHTML = `
-            <img src="${post.preview}" loading="lazy" onerror="this.src='https://via.placeholder.com/200x200?text=Error+403'">
+            <img src="${post.preview}" 
+                 loading="lazy" 
+                 onerror="this.src='https://via.placeholder.com/200x200?text=Error+403'"
+                 style="cursor: pointer;"> 
             <div class="card-info">
                 <span class="source-badge">${post.source}</span>
                 <button class="btn-dl-small">Descargar</button>
             </div>
         `;
 
-        // Evitamos usar onclick="" en el HTML y usamos event listeners reales
-        card.querySelector('.btn-dl-small').addEventListener('click', async () => {
+        // 🖼️ EVENTO: Abrir Lightbox al hacer clic en la imagen
+        const img = card.querySelector('img');
+        img.addEventListener('click', () => {
+            // Llamamos a la función que definimos en main.js
+            if (window.openLightbox) {
+                window.openLightbox(index);
+            } else {
+                console.error("La función openLightbox no está definida en window");
+            }
+        });
+
+        // Evento de descarga
+        card.querySelector('.btn-dl-small').addEventListener('click', async (e) => {
+            e.stopPropagation(); // Evita que al descargar también se abra el lightbox
             await this.handleDownload(post);
         });
 
         return card;
     },
 
-        async handleDownload(post) {
+    async handleDownload(post) {
         const status = document.getElementById('statusText');
         status.innerText = `📥 Descargando ${post.id}...`;
         
         try {
-            // 🚀 CORRECCIÓN: Enviamos un OBJETO que contiene el post y la ruta del estado
             const res = await ApiService.downloadSingle({ 
                 post: post, 
                 dir: state.downloadPath 

@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld('api', {
     // 📁 SISTEMA
     selectFolder: () => ipcRenderer.invoke('dialog:openDirectory'),
 
+    // ⚙️ CONFIGURACIÓN (Añadidos para la Fase 2)
+    getConfig: () => ipcRenderer.invoke('get-config'),
+    saveConfig: (config) => ipcRenderer.invoke('save-config', config),
+
     // 🛠️ DIAGNÓSTICO
     sendLog: (msg) => ipcRenderer.send('ui-log', msg),
 });

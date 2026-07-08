@@ -1,11 +1,11 @@
 // src/gui/js/api.js
 export const ApiService = {
-    // 🚀 CORRECCIÓN: Ahora acepta un objeto 'params' en lugar de argumentos sueltos
+    // 🚀 Búsqueda
     async search(params) {
-        // Pasamos el objeto tal cual llega desde el main.js (GUI)
         return await window.api.searchImages(params);
     },
 
+    // 📥 Descargas
     async downloadSingle({ post, dir }) {
         return await window.api.downloadSingle({ post, dir });
     },
@@ -15,10 +15,10 @@ export const ApiService = {
     },
 
     async downloadUntil(params) {
-        // Pasamos el objeto params completo (incluye tag, sources, startPage, endPage, dir, etc.)
         return await window.api.downloadUntilPage(params);
     },
 
+    // 📁 Sistema y Fuentes
     async selectFolder() {
         return await window.api.selectFolder();
     },
@@ -28,7 +28,19 @@ export const ApiService = {
     },
 
     async getSuggestions(params) {
-    return await window.api.getSuggestions(params);
+        return await window.api.getSuggestions(params);
     },
 
+    async clearLogs() {
+        return await window.api.clearLogs();
+    },
+
+    // ⚙️ CONFIGURACIÓN PERSISTENTE (NUEVOS)
+    async getConfig() {
+        return await window.api.getConfig();
+    },
+
+    async saveConfig(config) {
+        return await window.api.saveConfig(config);
+    },
 };
