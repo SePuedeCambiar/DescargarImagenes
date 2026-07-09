@@ -1,13 +1,21 @@
-import { spawn } from "child_process";
-import fs from "fs";
-import path from "path";
+import fs from 'fs';
+import axios from 'axios';
 
 export default class DownloadService {
     static async download(url, referer, tempPath) {
+        const writer = fs.createWriteStream(tempPath);
+        const response = await axios({
+            url,
+            method: 'GET',
+            responseType: 'stream',
+            headers: { 'Referer': referer }
+        });
+
+        response.data.pipe(writer);
+
         return new Promise((resolve, reject) => {
-            const args = ['-s', '-L', '-o', tempPath, '-H', `Referer: ${referer}`, url];
-            const proc = spawn('curl', args);
-            proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Curl ${code}`)));
+            writer.on('finish', resolve);
+            writer.on('error', reject);
         });
     }
 }

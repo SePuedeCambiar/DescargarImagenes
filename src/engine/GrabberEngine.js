@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { pathToFileURL } from 'url'; 
+import { app } from 'electron'; // <--- CRÍTICO: Importar app para rutas en producción
 import BrowserManager from './core/BrowserManager.js';
 import LogManager from './core/LogManager.js';
 import HashService from './services/HashService.js';
@@ -9,8 +10,8 @@ import DownloadService from './services/DownloadService.js';
 
 export default class WaifuGrabberEngine {
     constructor() {
-        // Usamos una ruta estándar para los logs en el HOME del usuario para evitar problemas de permisos
-        const logPath = process.env.LOG_FILE || path.join(process.env.HOME || process.env.USERPROFILE, '.waifugrabber', 'hashes_log.json');
+        // Ruta de logs: Priorizamos userData de Electron para evitar problemas de permisos en Linux/AppImage
+        const logPath = process.env.LOG_FILE || path.join(app.getPath('userData'), 'hashes_log.json');
         this.logManager = new LogManager(logPath);
         this.sources = {}; 
     }
@@ -19,7 +20,9 @@ export default class WaifuGrabberEngine {
     // 🛠️ CARGA AUTOMÁTICA DE FUENTES (SISTEMA DE PLUGINS)
     // ==========================================
     async initialize() {
-        const sourcesDir = path.join(process.cwd(), 'src', 'engine', 'sources');
+        // 🚨 CORRECCIÓN: Usamos app.getAppPath() en lugar de process.cwd()
+        // Esto asegura que encuentre la carpeta 'src' dentro del archivo app.asar del AppImage
+        const sourcesDir = path.join(app.getAppPath(), 'src', 'engine', 'sources');
         
         if (!fs.existsSync(sourcesDir)) {
             console.error(`[Engine] No se encontró la carpeta de fuentes en: ${sourcesDir}`);
@@ -57,32 +60,21 @@ export default class WaifuGrabberEngine {
     // ==========================================
     buildFinalQuery(tagName, categories = [], denylist = '') {
         let queryParts = [];
-
-        // 1. Tag principal (Personaje/Obra)
         if (tagName) queryParts.push(tagName);
-
-        // 2. Añadir categorías activas (ej: highres, absurdres)
         if (Array.isArray(categories)) {
             queryParts.push(...categories);
         }
-
-        // 3. Añadir la denylist con el signo menos (ej: -blur, -lowres)
         if (denylist && typeof denylist === 'string') {
             const blacklistedTags = denylist
                 .split(',')
                 .map(t => t.trim())
                 .filter(t => t !== '')
                 .map(t => `-${t}`);
-            
             queryParts.push(...blacklistedTags);
         }
-
         return queryParts.join(' ');
     }
 
-    // ==========================================
-    // 🛠️ MÉTODO PARA UI DINÁMICA
-    // ==========================================
     getAvailableSources() {
         return Object.entries(this.sources).map(([id, source]) => ({
             id: id,
@@ -93,121 +85,87 @@ export default class WaifuGrabberEngine {
     // ==========================================
     // 🚀 LÓGICA DE BÚSQUEDA
     // ==========================================
-    // 🚨 CORRECCIÓN: Ahora recibe un objeto 'params' para coincidir con el Frontend y Main.js
-    // SUSTITUYE COMPLETAMENTE tu función fetchPosts por esta:
-async fetchPosts(params) {
-    // 1. Extraemos los datos del objeto params
-    const { tag, sources: selectedSources, page, categories = [], denylist = '' } = params;
-    
-    const browser = await BrowserManager.getInstance();
-    let allPosts = [];
+    async fetchPosts(params) {
+        const { tag, sources: selectedSources, page, categories = [], denylist = '' } = params;
+        const browser = await BrowserManager.getInstance();
+        let allPosts = [];
 
-    // 2. Construimos la query final
-    const finalQuery = this.buildFinalQuery(tag, categories, denylist);
-    console.log(`[Engine] Ejecutando búsqueda con query: ${finalQuery}`);
+        const finalQuery = this.buildFinalQuery(tag, categories, denylist);
+        console.log(`[Engine] Ejecutando búsqueda con query: ${finalQuery}`);
 
-    // 3. Verificación de seguridad para evitar el error de "not iterable"
-    if (!selectedSources || !Array.isArray(selectedSources)) {
-        console.error("[Engine] Error: selectedSources no es un array válido. Recibido:", selectedSources);
-        return [];
-    }
+        if (!selectedSources || !Array.isArray(selectedSources)) {
+            console.error("[Engine] Error: selectedSources no es un array válido.");
+            return [];
+        }
 
-    for (const key of selectedSources) {
-        const source = this.sources[key];
-        if (!source) continue;
+        for (const key of selectedSources) {
+            const source = this.sources[key];
+            if (!source) continue;
 
-        const pageObj = await browser.newPage();
-        try {
-            await pageObj.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-            await pageObj.setRequestInterception(true);
-            pageObj.on('request', (req) => {
-                if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) req.abort();
-                else req.continue();
-            });
+            const pageObj = await browser.newPage();
+            try {
+                await pageObj.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                await pageObj.setRequestInterception(true);
+                pageObj.on('request', (req) => {
+                    if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) req.abort();
+                    else req.continue();
+                });
 
-            if (key === 'danbooru') {
-                const apiUrl = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(finalQuery)}&page=${page}&limit=42`;
-                const apiData = await pageObj.evaluate(async (url) => {
-                    try {
-                        const res = await fetch(url);
-                        return await res.json();
-                    } catch (e) { return null; }
-                }, apiUrl);
+                if (key === 'danbooru') {
+                    const apiUrl = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(finalQuery)}&page=${page}&limit=42`;
+                    const apiData = await pageObj.evaluate(async (url) => {
+                        try {
+                            const res = await fetch(url);
+                            return await res.json();
+                        } catch (e) { return null; }
+                    }, apiUrl);
 
-                if (apiData && Array.isArray(apiData)) {
-                    const formatted = apiData.map(p => ({
-                        id: p.id,
-                        source: 'danbooru',
-                        url: p.file_url || p.large_file_url || p.url,
-                        preview: p.preview_file_url || p.preview_url,
-                        isDirect: !!p.file_url
-                    }));
-                    allPosts = allPosts.concat(formatted);
+                    if (apiData && Array.isArray(apiData)) {
+                        const formatted = apiData.map(p => ({
+                            id: p.id,
+                            source: 'danbooru',
+                            url: p.file_url || p.large_file_url || p.url,
+                            preview: p.preview_file_url || p.preview_url,
+                            isDirect: !!p.file_url
+                        }));
+                        allPosts = allPosts.concat(formatted);
+                    }
+                } else {
+                    const webUrl = `https://${source.domain}/index.php?page=post&s=list&tags=${encodeURIComponent(finalQuery)}&pid=${(page-1)*source.pidMult}`;
+                    await pageObj.goto(webUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                    const posts = await this.scrapeHTML(pageObj, key);
+                    allPosts = allPosts.concat(posts);
                 }
-            } else {
-                const webUrl = `https://${source.domain}/index.php?page=post&s=list&tags=${encodeURIComponent(finalQuery)}&pid=${(page-1)*source.pidMult}`;
-                await pageObj.goto(webUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                const posts = await this.scrapeHTML(pageObj, key);
-                allPosts = allPosts.concat(posts);
+            } catch (e) { 
+                console.error(`[${key}] Error: ${e.message}`); 
+            } finally { 
+                await pageObj.close(); 
             }
-        } catch (e) { 
-            console.error(`[${key}] Error: ${e.message}`); 
-        } finally { 
-            await pageObj.close(); 
         }
+        return allPosts;
     }
-    return allPosts;
-}
-        // ==========================================
-    // 🛠️ AUXILIAR DE SCRAPING (Soporte HTML)
-    // ==========================================
+
     async scrapeHTML(pageObj, srcKey) {
-    return await pageObj.evaluate((sourceName) => {
-        // Intentamos varios selectores comunes en Boorus
-        const selectors = [
-            '.thumbnail-preview', // Gelbooru/Safebooru
-            '.thumb',             // Rule34
-            '.post-preview',      // Danbooru HTML
-            '.image-card',        // Genéricos
-            'div[class*="thumb"]' // Cualquier div que contenga la palabra thumb
-        ];
-
-        let elements = [];
-        for (const selector of selectors) {
-            const found = Array.from(document.querySelectorAll(selector));
-            if (found.length > 0) {
-                elements = found;
-                break; 
+        return await pageObj.evaluate((sourceName) => {
+            const selectors = ['.thumbnail-preview', '.thumb', '.post-preview', '.image-card', 'div[class*="thumb"]'];
+            let elements = [];
+            for (const selector of selectors) {
+                const found = Array.from(document.querySelectorAll(selector));
+                if (found.length > 0) { elements = found; break; }
             }
-        }
+            return elements.map(el => {
+                const a = el.querySelector('a');
+                const img = el.querySelector('img');
+                if (!a) return null;
+                const match = a.href.match(/id=(\d+)/) || a.href.match(/\/posts\/(\d+)/);
+                return { id: match ? match[1] : null, source: sourceName, url: a.href, preview: img ? img.src : null, isDirect: false };
+            }).filter(p => p && p.id);
+        }, srcKey);
+    }
 
-        return elements.map(el => {
-            const a = el.querySelector('a');
-            const img = el.querySelector('img');
-            if (!a) return null;
-
-            const match = a.href.match(/id=(\d+)/) || a.href.match(/\/posts\/(\d+)/);
-            return { 
-                id: match ? match[1] : null, 
-                source: sourceName, 
-                url: a.href, 
-                preview: img ? img.src : null, 
-                isDirect: false 
-            };
-        }).filter(p => p && p.id);
-    }, srcKey);
-}
-
-
-
-
-    // ==========================================
-    // 🔍 AUTOCOMPLETADO
-    // ==========================================
     async suggestTags(prefix) {
         const source = this.sources['danbooru'];
         if (!source) return [];
-        
         const browser = await BrowserManager.getInstance(); 
         return await source.getSuggestedTags(prefix, browser);
     }
@@ -228,7 +186,7 @@ async fetchPosts(params) {
 
         const tempPath = path.join(absoluteDir, `temp_${Date.now()}.tmp`);
 
-        return new Promise((resolve) => {
+        try {
             const referers = { 
                 rule34: 'https://rule34.xxx/', 
                 danbooru: 'https://danbooru.donmai.us/', 
@@ -236,42 +194,33 @@ async fetchPosts(params) {
                 safebooru: 'https://safebooru.org/'
             };
             const ref = referers[post.source] || 'https://google.com';
-            const args = ['-s', '-L', '-o', tempPath, '-H', `Referer: ${ref}`, finalUrl];
+
+            // 🚀 CORRECCIÓN: Usamos el servicio especializado DownloadService
+            // Ya no hacemos spawn('curl') aquí, lo hacemos en la clase DownloadService.js
+            await DownloadService.download(finalUrl, ref, tempPath);
+
+            const buffer = fs.readFileSync(tempPath);
+            const exactHash = await HashService.calculateExactHash(buffer);
+            const visualHash = await HashService.calculateVisualHash(buffer);
+
+            if (this.logManager.isDuplicate(exactHash, visualHash)) {
+                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+                return { success: false, message: "Duplicate" };
+            }
+
+            const cleanUrl = finalUrl.split('?')[0];
+            const ext = path.extname(cleanUrl) || '.jpg';
+            const fileName = `${post.source}_${post.id}${ext}`;
+            const fullPath = path.join(absoluteDir, fileName);
             
-            const proc = spawn('curl', args);
-
-            proc.on('close', async (code) => {
-                if (code !== 0 || !fs.existsSync(tempPath)) {
-                    resolve({ success: false, message: `Curl error ${code}` });
-                    return;
-                }
-
-                try {
-                    const buffer = fs.readFileSync(tempPath);
-                    const exactHash = await HashService.calculateExactHash(buffer);
-                    const visualHash = await HashService.calculateVisualHash(buffer);
-
-                    if (this.logManager.isDuplicate(exactHash, visualHash)) {
-                        fs.unlinkSync(tempPath);
-                        resolve({ success: false, message: "Duplicate" });
-                        return;
-                    }
-
-                    const cleanUrl = finalUrl.split('?')[0];
-                    const ext = path.extname(cleanUrl) || '.jpg';
-                    const fileName = `${post.source}_${post.id}${ext}`;
-                    const fullPath = path.join(absoluteDir, fileName);
-                    
-                    fs.renameSync(tempPath, fullPath);
-                    this.logManager.save(exactHash, visualHash);
-                    
-                    resolve({ success: true, filePath: fullPath });
-                } catch (e) {
-                    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-                    resolve({ success: false, message: e.message });
-                }
-            });
-        });
+            fs.renameSync(tempPath, fullPath);
+            this.logManager.save(exactHash, visualHash);
+            
+            return { success: true, filePath: fullPath };
+        } catch (e) {
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            return { success: false, message: e.message };
+        }
     }
 
     clearLogs() {
