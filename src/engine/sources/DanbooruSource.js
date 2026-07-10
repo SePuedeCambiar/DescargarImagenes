@@ -1,65 +1,58 @@
 import BaseSource from './BaseSource.js';
-import fs from 'fs';
-import path from 'path';
 
 export default class DanbooruSource extends BaseSource {
-    // 🚨 CONFIGURACIÓN AUTOMÁTICA
     static config = { 
         name: 'danbooru', 
         domain: 'danbooru.donmai.us', 
         pidMult: 42 
     };
 
-    static COMMON_HEADERS = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-    };
-
-    // 🔍 AUTOCOMPLETADO: Implementación corregida y blindada
+    // 🔍 AUTOCOMPLETADO: Usando fetch interno para evitar bloqueos
     async getSuggestedTags(prefix, browser) {
         const page = await browser.newPage();
         try {
-            // Usamos 'name_start' para que el datalist de HTML muestre las sugerencias
             const url = `https://danbooru.donmai.us/tags.json?search[name_start]=${encodeURIComponent(prefix)}`;
+            const data = await page.evaluate(async (targetUrl) => {
+                try {
+                    const response = await fetch(targetUrl);
+                    if (!response.ok) return null;
+                    return await response.json();
+                } catch (e) { return null; }
+            }, url);
             
-            await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
-            
-            const content = await page.evaluate(() => document.body.innerText);
-            
-            try {
-                const data = JSON.parse(content);
-                if (Array.isArray(data)) {
-                    return data.slice(0, 10).map(tag => tag.name);
-                }
-            } catch (e) {
-                console.error(`[Autocomplete] Error parseando JSON: ${e.message}`);
+            if (Array.isArray(data)) {
+                return data.slice(0, 10).map(tag => tag.name);
             }
             return [];
         } catch (e) {
-            console.error(`[Autocomplete] Error de red en Danbooru: ${e.message}`);
+            console.error(`[Autocomplete] Error: ${e.message}`);
             return [];
         } finally {
             await page.close();
         }
     }
 
-    // 📊 CONTEO DE POSTS: Corregido la URL y el parámetro
-    async getPostCounts(tagName) {
+    // 📊 CONTEO DE POSTS
+    async getPostCounts(tagName, browser) {
+        const page = await browser.newPage();
         try {
-            // URL CORRECTA para conteo, usando tagName
             const url = `https://danbooru.donmai.us/counts/posts.json?tags=${encodeURIComponent(tagName)}`;
-            
-            const res = await fetch(url, { headers: DanbooruSource.COMMON_HEADERS });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            
-            const data = await res.json();
-            const total = data.counts?.posts || 0;
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
+            const data = await page.evaluate(() => {
+                try {
+                    return JSON.parse(document.body.innerText);
+                } catch(e) { return null; }
+            });
+            const total = data?.counts?.posts || 0;
             return { total, maxPage: Math.ceil(total / 42) };
         } catch (e) {
-            console.error(`[Counter] Error en danbooru: ${e.message}`);
             return { total: 0, maxPage: 1 };
+        } finally {
+            await page.close();
         }
     }
 
+    // 🚀 BÚSQUEDA de posts
     async fetchPosts(page, tagName, browser) {
         const pageObj = await browser.newPage();
         try {
@@ -88,18 +81,51 @@ export default class DanbooruSource extends BaseSource {
         }
     }
 
+    // 🖼️ RESOLUCIÓN de Imagen (Copia exacta de la lógica de nsfw.js)
     async resolveImageUrl(postUrl, browser) {
-        const page = await browser.newPage();
-        try {
-            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-            await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-            return await page.evaluate(() => {
-                const i = document.querySelector('#image');
-                if (i && i.src) return i.src;
-                return null;
-            });
-        } finally {
-            await page.close();
-        }
+    if (!postUrl || typeof postUrl !== 'string') return null;
+
+    // Si ya es un link directo a imagen, no gastamos recursos de navegador
+    if (postUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) return postUrl;
+
+    const page = await browser.newPage();
+    try {
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+        
+        // 1. Cargamos la página SIN bloquear recursos (para parecer humanos)
+        await page.goto(postUrl, { 
+            waitUntil: 'domcontentloaded', 
+            timeout: 30000 
+        });
+
+        // 2. ESPERA CRÍTICA: Damos tiempo a que el JS de la web renderice los links
+        await new Promise(r => setTimeout(r, 2000));
+
+        // 3. Extracción simplificada y efectiva
+        const finalUrl = await page.evaluate(() => {
+            // Prioridad 1: Link a la imagen original
+            const l = document.querySelector('#post-option-view-original a, a.image-view-original-link');
+            if (l && l.href) return l.href;
+            
+            // Prioridad 2: Meta tag og:image
+            const og = document.querySelector('meta[property="og:image"]');
+            if (og && og.content) return og.content;
+            
+            // Prioridad 3: Elemento imagen
+            const i = document.querySelector('#image');
+            if (i && i.src) return i.src;
+            
+            return null;
+        });
+
+        return finalUrl;
+    } catch (e) {
+        console.error(`[Danbooru Resolve] Error: ${e.message}`);
+        return null;
+    } finally {
+        await page.close();
     }
+}
+
+
 }

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { pathToFileURL } from 'url'; 
-import { app } from 'electron'; // <--- CRÍTICO: Importar app para rutas en producción
+import { app } from 'electron'; 
 import BrowserManager from './core/BrowserManager.js';
 import LogManager from './core/LogManager.js';
 import HashService from './services/HashService.js';
@@ -20,8 +20,7 @@ export default class WaifuGrabberEngine {
     // 🛠️ CARGA AUTOMÁTICA DE FUENTES (SISTEMA DE PLUGINS)
     // ==========================================
     async initialize() {
-        // 🚨 CORRECCIÓN: Usamos app.getAppPath() en lugar de process.cwd()
-        // Esto asegura que encuentre la carpeta 'src' dentro del archivo app.asar del AppImage
+        // 🚨 CORRECCIÓN: app.getAppPath() es la única forma fiable de encontrar archivos dentro de app.asar
         const sourcesDir = path.join(app.getAppPath(), 'src', 'engine', 'sources');
         
         if (!fs.existsSync(sourcesDir)) {
@@ -56,7 +55,7 @@ export default class WaifuGrabberEngine {
     }
 
     // ==========================================
-    // 🛠️ CONSTRUCTOR DE CONSULTAS (MÓDULO B)
+    // 🛠️ CONSTRUCTOR DE CONSULTAS
     // ==========================================
     buildFinalQuery(tagName, categories = [], denylist = '') {
         let queryParts = [];
@@ -113,9 +112,11 @@ export default class WaifuGrabberEngine {
 
                 if (key === 'danbooru') {
                     const apiUrl = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(finalQuery)}&page=${page}&limit=42`;
+                    // 🚨 USAMOS page.evaluate para evitar que Puppeteer intente renderizar el JSON como HTML
                     const apiData = await pageObj.evaluate(async (url) => {
                         try {
                             const res = await fetch(url);
+                            if (!res.ok) return null;
                             return await res.json();
                         } catch (e) { return null; }
                     }, apiUrl);
@@ -174,6 +175,8 @@ export default class WaifuGrabberEngine {
     // 📥 LÓGICA DE DESCARGA
     // ==========================================
     async downloadImage(post, downloadDir) {
+        if (!post || !post.url) return { success: false, message: "URL inválida" };
+
         const absoluteDir = path.resolve(downloadDir);
         if (!fs.existsSync(absoluteDir)) fs.mkdirSync(absoluteDir, { recursive: true });
 
@@ -186,43 +189,55 @@ export default class WaifuGrabberEngine {
 
         const tempPath = path.join(absoluteDir, `temp_${Date.now()}.tmp`);
 
-        try {
-            const referers = { 
-                rule34: 'https://rule34.xxx/', 
-                danbooru: 'https://danbooru.donmai.us/', 
-                gelbooru: 'https://gelbooru.com/',
-                safebooru: 'https://safebooru.org/'
-            };
-            const ref = referers[post.source] || 'https://google.com';
+        // 🚀 SISTEMA DE REINTENTOS (Como en el código del bot)
+        const MAX_RETRIES = 3;
+        let lastError = null;
 
-            // 🚀 CORRECCIÓN: Usamos el servicio especializado DownloadService
-            // Ya no hacemos spawn('curl') aquí, lo hacemos en la clase DownloadService.js
-            await DownloadService.download(finalUrl, ref, tempPath);
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const referers = { 
+                    rule34: 'https://rule34.xxx/', 
+                    danbooru: 'https://danbooru.donmai.us/', 
+                    gelbooru: 'https://gelbooru.com/',
+                    safebooru: 'https://safebooru.org/'
+                };
+                const ref = referers[post.source] || 'https://google.com';
 
-            const buffer = fs.readFileSync(tempPath);
-            const exactHash = await HashService.calculateExactHash(buffer);
-            const visualHash = await HashService.calculateVisualHash(buffer);
+                // Intentamos la descarga con los headers pesados
+                await DownloadService.download(finalUrl, ref, tempPath);
 
-            if (this.logManager.isDuplicate(exactHash, visualHash)) {
+                // Si llegamos aquí, la descarga fue exitosa y validada
+                const buffer = fs.readFileSync(tempPath);
+                const exactHash = await HashService.calculateExactHash(buffer);
+                const visualHash = await HashService.calculateVisualHash(buffer);
+
+                if (this.logManager.isDuplicate(exactHash, visualHash)) {
+                    if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+                    return { success: false, message: "Duplicate" };
+                }
+
+                const cleanUrl = finalUrl.split('?')[0];
+                const ext = path.extname(cleanUrl) || '.jpg';
+                const fileName = `${post.source}_${post.id}${ext}`;
+                const fullPath = path.join(absoluteDir, fileName);
+                
+                fs.renameSync(tempPath, fullPath);
+                this.logManager.save(exactHash, visualHash);
+                
+                return { success: true, filePath: fullPath };
+
+            } catch (e) {
+                lastError = e;
+                console.log(`[Download] Intento ${attempt}/${MAX_RETRIES} falló: ${e.message}`);
                 if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-                return { success: false, message: "Duplicate" };
+                // Esperar un poco antes de reintentar
+                await new Promise(r => setTimeout(r, 1000 * attempt));
             }
-
-            const cleanUrl = finalUrl.split('?')[0];
-            const ext = path.extname(cleanUrl) || '.jpg';
-            const fileName = `${post.source}_${post.id}${ext}`;
-            const fullPath = path.join(absoluteDir, fileName);
-            
-            fs.renameSync(tempPath, fullPath);
-            this.logManager.save(exactHash, visualHash);
-            
-            return { success: true, filePath: fullPath };
-        } catch (e) {
-            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            return { success: false, message: e.message };
         }
-    }
 
+        return { success: false, message: `Falló tras ${MAX_RETRIES} intentos: ${lastError.message}` };
+    }
+    
     clearLogs() {
         this.logManager.clear();
         return { success: true };
