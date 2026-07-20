@@ -5,6 +5,13 @@ export const ApiService = {
         return await window.api.searchImages(params);
     },
 
+    // 🖼️ RESOLUCIÓN DE URLS (NUEVO)
+    // Este método permite obtener el link directo a la imagen 
+    // cuando la URL del post es una página HTML (Safebooru, Gelbooru, etc.)
+    async resolveUrl({ post }) {
+        return await window.api.resolveImageUrl({ post });
+    },
+
     // 📥 Descargas
     async downloadSingle({ post, dir }) {
         return await window.api.downloadSingle({ post, dir });
@@ -35,7 +42,7 @@ export const ApiService = {
         return await window.api.clearLogs();
     },
 
-    // ⚙️ CONFIGURACIÓN PERSISTENTE (NUEVOS)
+    // ⚙️ CONFIGURACIÓN PERSISTENTE
     async getConfig() {
         return await window.api.getConfig();
     },

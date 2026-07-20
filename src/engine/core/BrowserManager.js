@@ -9,7 +9,6 @@ puppeteer.use(StealthPlugin());
 class BrowserManager {
     static instance = null;
 
-    // Mantenemos tu función de búsqueda de binario tal cual
     static findChromeBinary(dir) {
         if (!fs.existsSync(dir)) return null;
         const files = fs.readdirSync(dir);
@@ -18,39 +17,58 @@ class BrowserManager {
             if (fs.statSync(fullPath).isDirectory()) {
                 const found = BrowserManager.findChromeBinary(fullPath);
                 if (found) return found;
-            } else if (file === 'chrome') return fullPath;
+            } else if (file === 'chrome' || file === 'chrome.exe') return fullPath;
         }
         return null;
     }
 
     static async getInstance() {
-        if (!this.instance) {
-            let browserRoot = app.isPackaged 
-                ? path.join(process.resourcesPath, 'puppeteer-browser') 
-                : path.join(process.cwd(), '.cache', 'puppeteer');
-            
-            const executablePath = this.findChromeBinary(browserRoot);
-            
-            this.instance = await puppeteer.launch({
-                executablePath: executablePath,
-                headless: 'new',
-                userDataDir: path.join(app.getPath('userData'), 'session_boorus'),
-                args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--single-process', // <--- Intenta añadir esto si el problema persiste
-    '--disable-extensions',
-                ],
-            });
+    if (!this.instance) {
+        let browserRoot = app.isPackaged 
+            ? path.join(process.resourcesPath, 'puppeteer-browser') 
+            : path.join(process.cwd(), '.cache', 'puppeteer');
+        
+        const executablePath = this.findChromeBinary(browserRoot);
+        const userDataDir = path.join(app.getPath('userData'), 'session_boorus');
+
+        // ============================================================
+        // 🛡️ ESTA ES LA PARTE CRÍTICA: BORRAR EL LOCK AUTOMÁTICAMENTE
+        // ============================================================
+        const lockFile = path.join(userDataDir, 'SingletonLock');
+        if (fs.existsSync(lockFile)) {
+            try {
+                fs.unlinkSync(lockFile); 
+                console.log('[BrowserManager] 🗑️ Lock antiguo removido para evitar bloqueo');
+            } catch (e) {
+                console.error(`[BrowserManager] ❌ No se pudo borrar el lock: ${e.message}`);
+            }
         }
-        return this.instance;
+        // ============================================================
+
+        this.instance = await puppeteer.launch({
+            executablePath: executablePath,
+            headless: 'new',
+            userDataDir: userDataDir,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-extensions',
+            ],
+        });
     }
+    return this.instance;
+}
 
     static async close() {
         if (this.instance) {
-            await this.instance.close();
-            this.instance = null;
+            try {
+                await this.instance.close();
+            } catch (e) {
+                console.error(`[BrowserManager] Error al cerrar: ${e.message}`);
+            } finally {
+                this.instance = null;
+            }
         }
     }
 }

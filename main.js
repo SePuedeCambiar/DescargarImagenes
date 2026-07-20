@@ -2,11 +2,8 @@ import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import WaifuGrabberEngine from './src/engine/GrabberEngine.js';
-import configService from './src/engine/ConfigService.js'; // 💾 IMPORTADO: Servicio de Persistencia
-
-
-let currentImageIndex = 0;
-let slideshowTimer = null;
+import BrowserManager from './src/engine/core/BrowserManager.js'; // Importante para el cierre
+import configService from './src/engine/ConfigService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +70,22 @@ ipcMain.handle('get-tag-suggestions', async (event, params) => {
     }
 });
 
+// 🚀 NUEVO: Resolución de URL para el Lightbox/Slideshow
+ipcMain.handle('resolve-image-url', async (event, { post }) => {
+    try {
+        const source = engine.sources[post.source];
+        if (!source) return null;
+        
+        // Obtenemos la instancia del navegador y resolvemos la URL real de la imagen
+        const browser = await BrowserManager.getInstance();
+        const realUrl = await source.resolveImageUrl(post.url, browser);
+        
+        return realUrl;
+    } catch (error) {
+        console.error(`[MAIN] Error resolviendo URL de imagen:`, error);
+        return null;
+    }
+});
 
 // 2. Búsqueda
 ipcMain.handle('search-images', async (event, args) => {
@@ -83,7 +96,6 @@ ipcMain.handle('search-images', async (event, args) => {
         throw error;
     }
 });
-
 
 ipcMain.handle('search-all-images', async (event, args) => {
     try {
@@ -164,7 +176,7 @@ ipcMain.handle('dialog:openDirectory', async () => {
     return filePaths[0];
 });
 
-// 5. 💾 GESTIÓN DE CONFIGURACIÓN PERSISTENTE (NUEVO)
+// 5. Gestión de Configuración Persistente
 ipcMain.handle('get-config', async () => {
     try {
         return configService.load();
@@ -189,7 +201,6 @@ ipcMain.handle('save-config', async (event, config) => {
 
 app.whenReady().then(async () => {
     try {
-        // Inicialización asíncrona del motor (Carga dinámica de plugins/sources)
         await engine.initialize(); 
         console.log("✅ Motor inicializado y fuentes cargadas dinámicamente.");
         
@@ -200,21 +211,19 @@ app.whenReady().then(async () => {
     }
 });
 
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
-
 app.on('window-all-closed', async () => {
     if (process.platform !== 'darwin') {
-        // 🚀 IMPORTANTE: Avisar al motor que cierre el navegador antes de salir
-        if (engine && engine.browserManager) {
-            await engine.browserManager.close(); 
+        // 🚀 LIMPIEZA CRÍTICA: Cerramos el navegador para evitar el SingletonLock
+        try {
+            await BrowserManager.close();
+            console.log("[MAIN] Navegador cerrado correctamente.");
+        } catch (e) {
+            console.error("[MAIN] Error cerrando navegador:", e);
         }
         app.quit();
     }
 });
 
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});

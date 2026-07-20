@@ -6,8 +6,8 @@ import { GridUI } from './ui/grid.js';
 // 🖼️ ELEMENTOS DEL DOM
 // ==========================================
 const dom = {
-    btnToggleControls: document.getElementById('btnToggleControls'), // Nuevos controles colapsables
-    controlsWrapper: document.getElementById('controlsWrapper'),     // Nuevos controles colapsables
+    btnToggleControls: document.getElementById('btnToggleControls'), 
+    controlsWrapper: document.getElementById('controlsWrapper'),     
     btnSearch: document.getElementById('btnSearch'),
     btnDownloadPage: document.getElementById('btnDownloadPage'),
     btnDownloadUntil: document.getElementById('btnDownloadUntil'),
@@ -112,11 +112,27 @@ function openLightbox(index) {
 // Exponemos la función al window para que grid.js pueda llamarla
 window.openLightbox = openLightbox; 
 
-function updateLightboxImage() {
+// 🔥 CORRECCIÓN AQUÍ: Ahora es async para resolver la imagen HD
+async function updateLightboxImage() {
     const post = state.posts[currentImageIndex];
     if (!post) return;
-    lbDom.img.src = post.url;
+
+    // 1. Carga inmediata: Si es directo usa url, si no usa la previa (preview)
+    // Esto evita que la pantalla quede en blanco mientras Puppeteer trabaja
+    lbDom.img.src = post.isDirect ? post.url : post.preview;
     lbDom.counter.innerText = `${currentImageIndex + 1} / ${state.posts.length}`;
+
+    // 2. Carga HD: Si no es directo, pedimos al backend la URL real
+    if (!post.isDirect) {
+        try {
+            const realUrl = await ApiService.resolveUrl({ post });
+            if (realUrl) {
+                lbDom.img.src = realUrl; // Actualizamos la imagen a alta resolución
+            }
+        } catch (e) {
+            console.error("Error resolviendo imagen HD:", e);
+        }
+    }
 }
 
 function nextImage() {
@@ -165,7 +181,6 @@ window.addEventListener('keydown', (e) => {
 // 🚀 MANEJADORES DE EVENTOS (ORQUESTACIÓN)
 // ==========================================
 
-// Alternar visibilidad de los filtros manualmente
 if (dom.btnToggleControls && dom.controlsWrapper) {
     dom.btnToggleControls.addEventListener('click', () => {
         dom.controlsWrapper.classList.toggle('collapsed');
@@ -224,20 +239,14 @@ dom.btnSearch.addEventListener('click', async () => {
             denylist: state.denylist 
         });
         
-        // 1. Guardamos los posts en el estado
         state.setPosts(posts);
-        
-        // 2. Guardamos los parámetros actuales
         state.updateSearch(tag, page, sources);
-        
-        // 3. Renderizamos
         GridUI.render(posts); 
         
         updateStatus(posts.length > 0 
             ? `✅ Se encontraron ${posts.length} imágenes.` 
             : "😢 No se encontraron imágenes.");
 
-        // Ocultar el panel de control tras una búsqueda exitosa para mejorar la visibilidad
         if (posts.length > 0 && dom.controlsWrapper) {
             dom.controlsWrapper.classList.add('collapsed');
             if (dom.btnToggleControls) {
@@ -262,6 +271,7 @@ dom.btnSelectFolder.addEventListener('click', async () => {
             updateStatus(`✅ Ruta cambiada a: ${newPath}`);
         }
     } catch (e) {
+        console.error("Error al seleccionar carpeta:", e);
         updateStatus("❌ Error al seleccionar carpeta", 'error');
     }
 });
