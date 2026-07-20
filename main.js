@@ -33,9 +33,15 @@ function setupHeaderInterceptor() {
 }
 
 function createWindow() {
+    // Definimos la ruta del icono
+    const iconPath = app.isPackaged 
+        ? path.join(process.resourcesPath, 'assets', 'icon.png') 
+        : path.join(__dirname, 'assets', 'icon.png');
+
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
+        icon: iconPath, // <--- AÑADE ESTA LÍNEA
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -46,6 +52,7 @@ function createWindow() {
 
     mainWindow.loadFile('src/gui/index.html');
 }
+
 
 // =============================================================================
 // 🔌 MANEJADORES DE COMUNICACIÓN (IPC)

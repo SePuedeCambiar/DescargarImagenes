@@ -16,7 +16,8 @@
       "target": [
         "AppImage"
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "icon": "assets/icon.png" 
     },
     "directories": {
       "output": "dist"
@@ -25,6 +26,7 @@
       "main.js",
       "preload.js",
       "src/**/*",
+      "assets/**/*", 
       "package.json"
     ],
     "extraResources": [
