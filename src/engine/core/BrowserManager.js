@@ -23,7 +23,23 @@ class BrowserManager {
     }
 
     static async getInstance() {
-    if (!this.instance) {
+        if (!this.instance) {
+            try {
+                this.instance = await this.launchBrowser();
+            } catch (e) {
+                console.error(`[BrowserManager] Primer intento fallido: ${e.message}`);
+                
+                // 🚀 ACCIÓN NUCLEAR: Si falla, borramos TODO el perfil y reintentamos
+                await this.clearFullSession();
+                
+                console.log(`[BrowserManager] Reintentando con sesión limpia...`);
+                this.instance = await this.launchBrowser();
+            }
+        }
+        return this.instance;
+    }
+
+    static async launchBrowser() {
         let browserRoot = app.isPackaged 
             ? path.join(process.resourcesPath, 'puppeteer-browser') 
             : path.join(process.cwd(), '.cache', 'puppeteer');
@@ -31,21 +47,13 @@ class BrowserManager {
         const executablePath = this.findChromeBinary(browserRoot);
         const userDataDir = path.join(app.getPath('userData'), 'session_boorus');
 
-        // ============================================================
-        // 🛡️ ESTA ES LA PARTE CRÍTICA: BORRAR EL LOCK AUTOMÁTICAMENTE
-        // ============================================================
+        // Borrar lock preventivamente
         const lockFile = path.join(userDataDir, 'SingletonLock');
         if (fs.existsSync(lockFile)) {
-            try {
-                fs.unlinkSync(lockFile); 
-                console.log('[BrowserManager] 🗑️ Lock antiguo removido para evitar bloqueo');
-            } catch (e) {
-                console.error(`[BrowserManager] ❌ No se pudo borrar el lock: ${e.message}`);
-            }
+            try { fs.unlinkSync(lockFile); } catch (e) {}
         }
-        // ============================================================
 
-        this.instance = await puppeteer.launch({
+        return await puppeteer.launch({
             executablePath: executablePath,
             headless: 'new',
             userDataDir: userDataDir,
@@ -54,21 +62,32 @@ class BrowserManager {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-extensions',
+                '--disable-gpu',              // 🚀 Crítico para Linux/AppImage
+                '--disable-software-rasterizer', // 🚀 Evita crashes de renderizado
+                '--no-first-run',
+                '--no-zygote',
             ],
         });
     }
-    return this.instance;
-}
+
+    static async clearFullSession() {
+        const userDataDir = path.join(app.getPath('userData'), 'session_boorus');
+        if (fs.existsSync(userDataDir)) {
+            try {
+                fs.rmSync(userDataDir, { recursive: true, force: true });
+                console.log(`[BrowserManager] 🗑️ Carpeta de sesión eliminada por completo`);
+            } catch (e) {
+                console.error(`[BrowserManager] Error borrando sesión: ${e.message}`);
+            }
+        }
+    }
 
     static async close() {
         if (this.instance) {
             try {
                 await this.instance.close();
-            } catch (e) {
-                console.error(`[BrowserManager] Error al cerrar: ${e.message}`);
-            } finally {
-                this.instance = null;
-            }
+            } catch (e) {}
+            this.instance = null;
         }
     }
 }
