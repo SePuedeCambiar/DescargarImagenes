@@ -6,6 +6,8 @@ import { GridUI } from './ui/grid.js';
 // 🖼️ ELEMENTOS DEL DOM
 // ==========================================
 const dom = {
+    btnToggleControls: document.getElementById('btnToggleControls'), // Nuevos controles colapsables
+    controlsWrapper: document.getElementById('controlsWrapper'),     // Nuevos controles colapsables
     btnSearch: document.getElementById('btnSearch'),
     btnDownloadPage: document.getElementById('btnDownloadPage'),
     btnDownloadUntil: document.getElementById('btnDownloadUntil'),
@@ -52,7 +54,7 @@ function updateStatus(msg, type = 'info') {
 async function persistSettings() {
     try {
         await ApiService.saveConfig(state.getConfig());
-        console.log("[UI] Configuración guardada exitosamente.");
+        console.log("[UI] Configuración guardada.");
     } catch (e) {
         console.error("Error guardando configuración:", e);
     }
@@ -163,6 +165,18 @@ window.addEventListener('keydown', (e) => {
 // 🚀 MANEJADORES DE EVENTOS (ORQUESTACIÓN)
 // ==========================================
 
+// Alternar visibilidad de los filtros manualmente
+if (dom.btnToggleControls && dom.controlsWrapper) {
+    dom.btnToggleControls.addEventListener('click', () => {
+        dom.controlsWrapper.classList.toggle('collapsed');
+        if (dom.controlsWrapper.classList.contains('collapsed')) {
+            dom.btnToggleControls.textContent = '⚙️ Mostrar Filtros';
+        } else {
+            dom.btnToggleControls.textContent = '⚙️ Filtros y Opciones';
+        }
+    });
+}
+
 let debounceTimer; 
 dom.inputTag.addEventListener('input', async () => {
     const prefix = dom.inputTag.value.trim();
@@ -213,15 +227,23 @@ dom.btnSearch.addEventListener('click', async () => {
         // 1. Guardamos los posts en el estado
         state.setPosts(posts);
         
-        // 2. Guardamos los parámetros actuales para que GridUI sepa cómo pedir más páginas
+        // 2. Guardamos los parámetros actuales
         state.updateSearch(tag, page, sources);
         
-        // 3. Renderizamos (Aquí GridUI hará la carga de 3 en 3)
+        // 3. Renderizamos
         GridUI.render(posts); 
         
         updateStatus(posts.length > 0 
             ? `✅ Se encontraron ${posts.length} imágenes.` 
             : "😢 No se encontraron imágenes.");
+
+        // Ocultar el panel de control tras una búsqueda exitosa para mejorar la visibilidad
+        if (posts.length > 0 && dom.controlsWrapper) {
+            dom.controlsWrapper.classList.add('collapsed');
+            if (dom.btnToggleControls) {
+                dom.btnToggleControls.textContent = '⚙️ Mostrar Filtros';
+            }
+        }
     } catch (e) {
         console.error(e);
         updateStatus("❌ Error en la búsqueda", 'error');

@@ -11,68 +11,78 @@
 <body>
 
     <div class="app-container">
-        <!-- HEADER: Búsqueda y Filtros -->
+        <!-- HEADER PRINCIPAL -->
         <header>
-            <h1>🌸 Waifu <span>Grabber</span></h1>
-            
-            <div class="search-section">
-                <div class="input-group">
-                    <input type="text" id="tagName" placeholder="Nombre del personaje / Tag..." list="tagSuggestions">
-                    <select id="mode">
-                        <option value="nsfw">🔥 NSFW</option>
-                        <option value="sfw">🌸 SFW</option>
-                    </select>
-                    <button id="btnSearch">Buscar</button>
-                </div>
-
-                <div class="filters">
-                    <div class="page-control">
-                        <span>Página:</span>
-                        <input type="number" id="pageNumber" value="1" min="1">
-                    </div>
-                </div>
+            <div class="header-main">
+                <h1>🌸 Waifu <span>Grabber</span></h1>
+                <!-- Botón para ocultar y mostrar los paneles de control -->
+                <button id="btnToggleControls" class="btn-toggle">⚙️ Opciones y Filtros</button>
             </div>
-
-            <!-- SECCIÓN DE FILTROS AVANZADOS -->
-            <div class="advanced-filters">
-                <div class="filter-group">
-                    <label for="denylistInput">🚫 Denylist (Tags a excluir):</label>
-                    <input type="text" id="denylistInput" placeholder="blur, lowres, watermark...">
-                </div>
-
-                <div class="filter-group">
-                    <label for="apiKey">🔑 Danbooru API Key:</label>
-                    <input type="password" id="apiKey" placeholder="Introduce tu API Key...">
-                </div>
+            
+            <!-- PANEL COLAPSABLE -->
+            <div id="controlsWrapper" class="controls-wrapper">
                 
-                <div class="filter-group">
-                    <label>✨ Categorías rápidas:</label>
-                    <div id="categoryToggles" class="category-chips">
-                        <!-- Chips generados dinámicamente -->
+                <!-- Búsqueda y Filtros Básicos -->
+                <div class="search-section">
+                    <div class="input-group">
+                        <input type="text" id="tagName" placeholder="Nombre del personaje / Tag..." list="tagSuggestions">
+                        <select id="mode">
+                            <option value="nsfw">🔥 NSFW</option>
+                            <option value="sfw">🌸 SFW</option>
+                        </select>
+                        <button id="btnSearch">Buscar</button>
+                    </div>
+
+                    <div class="filters">
+                        <div class="page-control">
+                            <span>Página:</span>
+                            <input type="number" id="pageNumber" value="1" min="1">
+                        </div>
                     </div>
                 </div>
+
+                <!-- Filtros Avanzados -->
+                <div class="advanced-filters">
+                    <div class="filter-group">
+                        <label for="denylistInput">🚫 Denylist (Tags a excluir):</label>
+                        <input type="text" id="denylistInput" placeholder="blur, lowres, watermark...">
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="apiKey">🔑 Danbooru API Key:</label>
+                        <input type="password" id="apiKey" placeholder="Introduce tu API Key...">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>✨ Categorías rápidas:</label>
+                        <div id="categoryToggles" class="category-chips">
+                            <!-- Chips generados dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controles Globales de Descarga (integrados en el colapsable) -->
+                <div id="globalControls" class="global-controls hidden">
+                    <div class="folder-selection">
+                        <button id="btnSelectFolder" class="btn-secondary">📁 Seleccionar Carpeta</button>
+                        <span id="currentPathText" class="path-text">./downloads</span>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button id="btnDownloadPage" class="btn-secondary">📥 Descargar Página</button>
+                        <div class="bulk-download">
+                            <span>Hasta pág:</span>
+                            <input type="number" id="untilPage" value="1" min="1">
+                            <button id="btnDownloadUntil" class="btn-secondary">🚀 Descarga Masiva</button>
+                        </div>
+                        <button id="btnClearLogs" class="btn-danger">🧹 Limpiar Hashes</button>
+                    </div>
+                    
+                    <div id="statusText" class="status-text">Listo para descargar</div>
+                </div>
+
             </div>
         </header>
-
-        <!-- CONTROLES GLOBALES (Aparecen al haber resultados) -->
-        <div id="globalControls" class="global-controls hidden">
-            <div class="folder-selection">
-                <button id="btnSelectFolder" class="btn-secondary">📁 Seleccionar Carpeta</button>
-                <span id="currentPathText" class="path-text">./downloads</span>
-            </div>
-
-            <div class="action-buttons">
-                <button id="btnDownloadPage" class="btn-secondary">📥 Descargar Página</button>
-                <div class="bulk-download">
-                    <span>Hasta pág:</span>
-                    <input type="number" id="untilPage" value="1" min="1">
-                    <button id="btnDownloadUntil" class="btn-secondary">🚀 Descarga Masiva</button>
-                </div>
-                <button id="btnClearLogs" class="btn-danger">🧹 Limpiar Hashes</button>
-            </div>
-            
-            <div id="statusText" class="status-text">Listo para descargar</div>
-        </div>
 
         <!-- GRID DE RESULTADOS -->
         <div id="resultsGrid" class="results-grid">
@@ -80,13 +90,12 @@
         </div>
     </div>
 
-    <!-- 🚀 VISUALIZADOR DE IMÁGENES (LIGHTBOX) -->
-    <!-- Este div está fuera de app-container para que flote sobre todo el software -->
+    <!-- VISUALIZADOR DE IMÁGENES (LIGHTBOX) -->
     <div id="lightbox" class="lightbox hidden">
         <!-- Botón de cerrar -->
         <span id="closeLightbox" class="lightbox-close">&times;</span>
         
-        <!-- Contador de imagen (ej: 1 / 50) -->
+        <!-- Contador de imagen -->
         <div id="lightboxCounter" class="lightbox-counter">1 / 1</div>
 
         <!-- Contenedor de la imagen -->
